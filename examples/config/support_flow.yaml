@@ -1,0 +1,31 @@
+version: v1
+name: support_flow
+entry_step: validate
+policies:
+  - deny_send_without_approval
+steps:
+  - name: validate
+    tool: support.validate
+    transition:
+      kind: then
+      next_step: fetch_customer
+  - name: fetch_customer
+    tool: customer.fetch
+    transition:
+      kind: then
+      next_step: draft_reply
+  - name: draft_reply
+    tool: message.draft
+    transition:
+      kind: then
+      next_step: draft_shape
+  - name: draft_shape
+    tool: draft.shape
+    transition:
+      kind: then
+      next_step: send_reply
+  - name: send_reply
+    tool: message.send
+    approval_override: true
+    transition:
+      kind: end

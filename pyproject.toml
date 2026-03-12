@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "governai"
+version = "0.1.0"
+description = "Governed, deterministic AI backend workflow framework"
+readme = "README.md"
+license = "LicenseRef-Proprietary"
+requires-python = ">=3.12"
+keywords = ["ai", "workflow", "governance", "agents", "langchain", "langgraph"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Typing :: Typed",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+]
+dependencies = [
+  "langchain>=1.2.10",
+  "langchain-openai>=1.1.10",
+  "lark>=1.2.2",
+  "pydantic>=2.7,<3",
+  "PyYAML>=6.0.2",
+  "python-dotenv>=1.2.2",
+]
+
+[project.optional-dependencies]
+redis = [
+  "redis>=5.0.0",
+]
+dev = [
+  "build>=1.2.2",
+  "pytest>=8.0",
+  "twine>=5.1.1",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["governai*"]
+exclude = ["tests*", "examples*"]
+
+[tool.setuptools.package-data]
+governai = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
