@@ -6,7 +6,10 @@
    ```bash
    git remote add origin git@github.com:rrrozhd/governai.git
    ```
-2. In GitHub repository settings, add secret `PYPI_API_TOKEN`.
+2. Configure a PyPI Trusted Publisher for:
+   - repository: `rrrozhd/governai`
+   - workflow: `publish.yml`
+   - environment: `pypi`
 3. Ensure the repository default branch is `main`.
 
 ## Local pre-release check
@@ -24,14 +27,14 @@ python -m twine check dist/*
 2. Commit the version bump.
 3. Tag the release using the same version:
    ```bash
-   git tag v0.2.0
+   git tag vX.Y.Z
    ```
 4. Push branch and tags:
    ```bash
    git push origin main --tags
    ```
 
-The `Publish Package` workflow runs on `v*` tags and uploads to PyPI.
+The `Publish Package` workflow runs on `v*` tags and uploads to PyPI through GitHub OIDC trusted publishing.
 
 ## Publish on Git only (without PyPI)
 

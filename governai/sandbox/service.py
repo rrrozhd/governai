@@ -135,7 +135,7 @@ def create_sandbox_app(
     if not bearer_token:
         raise ValueError("bearer_token must not be empty")
 
-    app = FastAPI(title="GovernAI Sandbox", version="0.2.0")
+    app = FastAPI(title="GovernAI Sandbox", version="0.2.1")
 
     def require_auth(authorization: str | None) -> None:
         expected = f"Bearer {bearer_token}"

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.1
+
+Release date: 2026-03-14
+
+Highlights:
+
+- Fixed GitHub Actions PyPI publishing for trusted publisher mode by enabling OIDC `id-token: write`.
+- Keeps the contained execution, thread-native run, and durable interrupt changes introduced in `0.2.0`.
+
 ## 0.2.0
 
 Release date: 2026-03-14
