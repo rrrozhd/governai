@@ -4,7 +4,7 @@
 
 1. Add your remote:
    ```bash
-   git remote add origin <your-repo-url>
+   git remote add origin git@github.com:rrrozhd/governai.git
    ```
 2. In GitHub repository settings, add secret `PYPI_API_TOKEN`.
 3. Ensure the repository default branch is `main`.
@@ -44,5 +44,5 @@ git push origin main
 Consumers can install directly:
 
 ```bash
-pip install "governai @ git+https://<your-git-host>/<org>/<repo>.git@main"
+pip install "governai @ git+https://github.com/rrrozhd/governai.git@main"
 ```

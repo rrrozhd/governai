@@ -1,5 +1,9 @@
 # governai
 
+[![PyPI version](https://img.shields.io/pypi/v/governai)](https://pypi.org/project/governai/)
+[![Python](https://img.shields.io/pypi/pyversions/governai)](https://pypi.org/project/governai/)
+[![CI](https://img.shields.io/github/actions/workflow/status/rrrozhd/governai/ci.yml?branch=main&label=ci)](https://github.com/rrrozhd/governai/actions/workflows/ci.yml)
+
 `governai` is a developer-facing Python framework for building governed AI backends with deterministic execution.
 
 It is designed for teams that need explicit control over what runs next, what is allowed, what needs approval, and what happened during execution.
@@ -25,18 +29,20 @@ It is designed for teams that need explicit control over what runs next, what is
 - background scheduling
 - autonomous free-form swarms
 
-## Quickstart
+## Install
 
-Install as a library:
+Requires Python 3.12+.
+
+Install from PyPI:
 
 ```bash
 pip install governai
 ```
 
-Install directly from git:
+Install directly from GitHub:
 
 ```bash
-pip install "governai @ git+https://<your-git-host>/<org>/<repo>.git@main"
+pip install "governai @ git+https://github.com/rrrozhd/governai.git@main"
 ```
 
 Local editable install for development:
@@ -44,6 +50,8 @@ Local editable install for development:
 ```bash
 pip install -e .[dev]
 ```
+
+## Quickstart
 
 ```python
 from pydantic import BaseModel
@@ -166,10 +174,12 @@ flow = governed_flow_from_dsl(
 
 ## Documentation
 
-- Quickstart: [`docs/quickstart.md`](/Users/dondoe/coding/governai/docs/quickstart.md)
-- Patterns: [`docs/patterns.md`](/Users/dondoe/coding/governai/docs/patterns.md)
-- API Reference: [`docs/reference.md`](/Users/dondoe/coding/governai/docs/reference.md)
-- Index: [`docs/USAGE.md`](/Users/dondoe/coding/governai/docs/USAGE.md)
+- Documentation index: [`docs/USAGE.md`](docs/USAGE.md)
+- Quickstart: [`docs/quickstart.md`](docs/quickstart.md)
+- Patterns: [`docs/patterns.md`](docs/patterns.md)
+- API Reference: [`docs/reference.md`](docs/reference.md)
+- GitHub repository: [github.com/rrrozhd/governai](https://github.com/rrrozhd/governai)
+- PyPI package: [pypi.org/project/governai](https://pypi.org/project/governai/)
 
 ## Example App
 

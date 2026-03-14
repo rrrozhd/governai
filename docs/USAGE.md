@@ -2,8 +2,8 @@
 
 The usage docs are split into focused guides:
 
-- Quickstart: [`docs/quickstart.md`](/Users/dondoe/coding/governai/docs/quickstart.md)
-- Patterns: [`docs/patterns.md`](/Users/dondoe/coding/governai/docs/patterns.md)
-- API Reference: [`docs/reference.md`](/Users/dondoe/coding/governai/docs/reference.md)
+- Quickstart: [`docs/quickstart.md`](quickstart.md)
+- Patterns: [`docs/patterns.md`](patterns.md)
+- API Reference: [`docs/reference.md`](reference.md)
 
 If you're new to the library, start with **Quickstart**.

@@ -26,6 +26,13 @@ dependencies = [
   "python-dotenv>=1.2.2",
 ]
 
+[project.urls]
+Homepage = "https://github.com/rrrozhd/governai"
+Repository = "https://github.com/rrrozhd/governai"
+Issues = "https://github.com/rrrozhd/governai/issues"
+Documentation = "https://github.com/rrrozhd/governai/blob/main/docs/USAGE.md"
+PyPI = "https://pypi.org/project/governai/"
+
 [project.optional-dependencies]
 redis = [
   "redis>=5.0.0",

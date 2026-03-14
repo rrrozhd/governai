@@ -98,10 +98,10 @@ for event in flow.runtime.audit_emitter.events:
 
 ## Try included examples
 
-- Script: [`examples/support_flow.py`](/Users/dondoe/coding/governai/examples/support_flow.py)
-- Config/DSL parity script: [`examples/support_flow_from_definitions.py`](/Users/dondoe/coding/governai/examples/support_flow_from_definitions.py)
-- Notebook (LangChain + approval): [`examples/notebooks/governai_support_workflow.ipynb`](/Users/dondoe/coding/governai/examples/notebooks/governai_support_workflow.ipynb)
-- Notebook (LangChain + multi-agent): [`examples/notebooks/governai_multi_agent_workflow.ipynb`](/Users/dondoe/coding/governai/examples/notebooks/governai_multi_agent_workflow.ipynb)
+- Script: [`examples/support_flow.py`](../examples/support_flow.py)
+- Config/DSL parity script: [`examples/support_flow_from_definitions.py`](../examples/support_flow_from_definitions.py)
+- Notebook (LangChain + approval): [`examples/notebooks/governai_support_workflow.ipynb`](../examples/notebooks/governai_support_workflow.ipynb)
+- Notebook (LangChain + multi-agent): [`examples/notebooks/governai_multi_agent_workflow.ipynb`](../examples/notebooks/governai_multi_agent_workflow.ipynb)
 
 ## Compile from YAML/JSON config
 

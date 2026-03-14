@@ -261,7 +261,7 @@ Agent exceptions:
 
 ## Source Pointers
 
-- core runtime: [`governai/runtime/local.py`](/Users/dondoe/coding/governai/governai/runtime/local.py)
-- workflow model: [`governai/workflows/base.py`](/Users/dondoe/coding/governai/governai/workflows/base.py)
-- tools: [`governai/tools/base.py`](/Users/dondoe/coding/governai/governai/tools/base.py)
-- agents: [`governai/agents/base.py`](/Users/dondoe/coding/governai/governai/agents/base.py)
+- core runtime: [`governai/runtime/local.py`](../governai/runtime/local.py)
+- workflow model: [`governai/workflows/base.py`](../governai/workflows/base.py)
+- tools: [`governai/tools/base.py`](../governai/tools/base.py)
+- agents: [`governai/agents/base.py`](../governai/agents/base.py)
