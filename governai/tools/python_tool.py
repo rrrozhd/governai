@@ -6,7 +6,7 @@ from typing import Any, Union
 
 from pydantic import BaseModel
 
-from governai.tools.base import InModelT, OutModelT, Tool
+from governai.tools.base import ExecutionPlacement, InModelT, OutModelT, Tool
 
 PythonReturn = Union[OutModelT, dict[str, Any], BaseModel]
 PythonHandler = Callable[[Any, InModelT], Union[Awaitable[PythonReturn], PythonReturn]]
@@ -26,6 +26,8 @@ class PythonTool(Tool[InModelT, OutModelT]):
         timeout_seconds: float | None = None,
         requires_approval: bool = False,
         tags: list[str] | None = None,
+        execution_placement: ExecutionPlacement = "local_only",
+        remote_name: str | None = None,
     ) -> None:
         """Initialize PythonTool."""
         super().__init__(
@@ -39,6 +41,8 @@ class PythonTool(Tool[InModelT, OutModelT]):
             requires_approval=requires_approval,
             tags=tags,
             executor_type="python",
+            execution_placement=execution_placement,
+            remote_name=remote_name,
         )
         self._handler = handler
 
@@ -61,6 +65,8 @@ def tool(
     timeout_seconds: float | None = None,
     requires_approval: bool = False,
     tags: list[str] | None = None,
+    execution_placement: ExecutionPlacement = "local_only",
+    remote_name: str | None = None,
 ) -> Callable[[PythonHandler], PythonTool[InModelT, OutModelT]]:
     """Tool."""
     def decorator(func: PythonHandler) -> PythonTool[InModelT, OutModelT]:
@@ -76,6 +82,8 @@ def tool(
             timeout_seconds=timeout_seconds,
             requires_approval=requires_approval,
             tags=tags,
+            execution_placement=execution_placement,
+            remote_name=remote_name,
         )
 
     return decorator

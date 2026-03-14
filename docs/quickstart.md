@@ -9,6 +9,18 @@ uv sync --extra dev
 source .venv/bin/activate
 ```
 
+For the HTTP sandbox worker:
+
+```bash
+uv sync --extra dev --extra sandbox
+```
+
+For Redis-backed run and interrupt persistence:
+
+```bash
+uv sync --extra dev --extra redis
+```
+
 ## Configure env (for LLM examples)
 
 Create `.env` at repo root:
@@ -74,6 +86,44 @@ if state.pending_approval:
     )
 ```
 
+## Use thread-native runs
+
+`run(..., thread_id=...)` is additive. If you omit `thread_id`, GovernAI keeps the old behavior and uses the generated `run_id` as the thread identifier.
+
+```python
+state = await flow.run(payload, thread_id="thread-123")
+latest = await flow.get_latest_run_state("thread-123")
+runs = await flow.list_thread_runs("thread-123")
+```
+
+If the latest run for a thread is waiting on approval or an interrupt, you can resume it without keeping your own `thread_id -> run_id` map:
+
+```python
+from governai import ApprovalDecision, ApprovalDecisionType
+
+state = await flow.resume_latest(
+    "thread-123",
+    ApprovalDecision(
+        decision=ApprovalDecisionType.APPROVE,
+        decided_by="alice",
+    ),
+)
+```
+
+## Persist interrupts durably
+
+The default path is in-memory. If you need interrupts to survive process recreation, pass a durable interrupt store.
+
+```python
+from governai import RedisInterruptStore
+
+flow = MyFlow(
+    interrupt_store=RedisInterruptStore(redis_url="redis://localhost:6379/0"),
+)
+```
+
+This keeps interrupt requests and per-run interrupt epochs durable while preserving the existing `resume(run_id, ...)` API.
+
 ## Add policy checks
 
 ```python
@@ -100,6 +150,8 @@ for event in flow.runtime.audit_emitter.events:
 
 - Script: [`examples/support_flow.py`](../examples/support_flow.py)
 - Config/DSL parity script: [`examples/support_flow_from_definitions.py`](../examples/support_flow_from_definitions.py)
+- Thread-aware resume script: [`examples/thread_resume.py`](../examples/thread_resume.py)
+- Strict remote sandbox example: [`examples/strict_remote_sandbox.py`](../examples/strict_remote_sandbox.py)
 - Notebook (LangChain + approval): [`examples/notebooks/governai_support_workflow.ipynb`](../examples/notebooks/governai_support_workflow.ipynb)
 - Notebook (LangChain + multi-agent): [`examples/notebooks/governai_multi_agent_workflow.ipynb`](../examples/notebooks/governai_multi_agent_workflow.ipynb)
 
@@ -136,3 +188,23 @@ flow = governed_flow_from_dsl(
     agent_registry=AgentRegistry(),
 )
 ```
+
+## Choose containment mode
+
+`governai` defaults to host execution in `local_dev` mode. If you need the control plane local but execution remote, use `strict_remote` with a configured sandbox adapter.
+
+```python
+from governai import HTTPSandboxExecutionAdapter
+
+flow = MyFlow(
+    containment_mode="strict_remote",
+    remote_execution_adapter=HTTPSandboxExecutionAdapter(
+        base_url="https://sandbox.internal",
+        bearer_token="replace-me",
+    ),
+)
+```
+
+More detail: [`docs/sandbox.md`](sandbox.md)
+
+For thread-native execution and durable interrupts: [`docs/threading.md`](threading.md)

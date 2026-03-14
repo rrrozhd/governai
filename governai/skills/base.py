@@ -10,7 +10,7 @@ class Skill:
         name: str,
         tools: list[Tool],
         description: str = "",
-        version: str = "0.1.0",
+        version: str = "0.2.0",
     ) -> None:
         """Initialize Skill."""
         self.name = name

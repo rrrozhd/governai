@@ -493,6 +493,9 @@ def governed_flow_from_config(
     skill_registry: SkillRegistry | Mapping[str, Any] | SkillResolver | None = None,
     runtime_overrides: Mapping[str, Any] | None = None,
     format: str = "auto",
+    containment_mode: str = "local_dev",
+    remote_execution_adapter: Any = None,
+    interrupt_store: Any = None,
 ) -> GovernedFlow:
     """Load, compile, and return an executable governed flow from config input."""
     config = load_flow_config(config_or_path, format=format)
@@ -504,4 +507,7 @@ def governed_flow_from_config(
         skill_resolver=_coerce_skill_resolver(skill_registry),
     )
     kwargs = dict(runtime_overrides or {})
+    kwargs.setdefault("containment_mode", containment_mode)
+    kwargs.setdefault("remote_execution_adapter", remote_execution_adapter)
+    kwargs.setdefault("interrupt_store", interrupt_store)
     return governed_flow(spec, **kwargs)

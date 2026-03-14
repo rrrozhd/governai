@@ -19,12 +19,14 @@ Primary exports:
 - DSL compiler: `DSLAst`, `parse_dsl`, `dsl_to_flow_config`, `governed_flow_from_dsl`
 - transition helpers: `then`, `end`, `branch`, `route_to`
 - execution backends: `ExecutionBackend`, `AsyncBackend`, `ThreadPoolBackend`, `ProcessPoolBackend`
-- runtime stores: `RunStore`, `InMemoryRunStore`, `RedisRunStore`
-- interrupt runtime: `InterruptManager`, `InterruptRequest`, `InterruptResolution`
+- runtime stores: `RunStore`, `ThreadAwareRunStore`, `InMemoryRunStore`, `RedisRunStore`
+- interrupt runtime: `InterruptManager`, `InterruptStore`, `InMemoryInterruptStore`, `RedisInterruptStore`, `InterruptRequest`, `InterruptResolution`
 - integration helpers: `GovernedHTTPClient`, `ProviderErrorCode`, `parse_provider_error`
+- remote execution: `HTTPSandboxExecutionAdapter`, `create_sandbox_app`
 - `PolicyEngine`, `policy`, `PolicyDecision`, `PolicyContext`
 - `ApprovalEngine`, `ApprovalDecision`, `ApprovalDecisionType`, `ApprovalRequest`
 - `Agent`, `AgentRegistry`, `AgentTask`, `AgentResult`
+- remote request/response models: `RemoteToolExecutionRequest`, `RemoteToolExecutionResponse`, `RemoteAgentExecutionRequest`, `RemoteAgentExecutionResponse`
 - `InMemoryAuditEmitter`, `AuditEvent`
 - enums/constants: `RunStatus`, `EventType`, `DeterminismMode`, `END_STEP`
 - structured exceptions for tools/workflows/agents/approvals/policies
@@ -43,6 +45,8 @@ Key args:
 - `timeout_seconds: float | None`
 - `requires_approval: bool`
 - `tags: list[str] | None`
+- `execution_placement: "local_only" | "remote_only" | "local_or_remote"`
+- `remote_name: str | None`
 
 ### `step(...)`
 Defines workflow step with exactly one executor.
@@ -74,8 +78,21 @@ Spec building blocks:
 
 `GovernedFlow` methods:
 - `await run(data)`
+- `await run(data, thread_id="thread-123")`
 - `await resume(run_id, decision)`
+- `await get_latest_run_state(thread_id)`
+- `await resume_latest(thread_id, payload)`
+- `await list_thread_runs(thread_id)`
+- `await list_pending_interrupts(run_id)`
+- `await get_pending_interrupt(run_id, interrupt_id)`
+- `await get_latest_pending_interrupt(run_id)`
+- `await list_thread_pending_interrupts(thread_id)`
 - `get_run_state(run_id)`
+
+Containment/runtime args:
+- `containment_mode="local_dev" | "strict_remote"`
+- `remote_execution_adapter=...`
+- `interrupt_store=...`
 
 ## Config Compiler (`FlowConfigV1`)
 
@@ -154,19 +171,64 @@ Runtime handling:
 - invalid JSON output -> `CLIToolOutputError`
 - timeout -> `CLIToolTimeoutError`
 
+CLI containment note:
+- `local_only` CLI tools still spawn host subprocesses
+- remote containment only applies when the CLI tool is routed through the sandbox
+
 ## Workflow Runtime
 
-`await workflow.run(input)`:
+`await workflow.run(input, *, thread_id=None)`:
 - creates `RunState`
 - executes from entry step
 - enforces deterministic transitions
 - stores artifacts
 - emits audit events
 
+Thread behavior:
+- if `thread_id is None`, `RunState.thread_id` defaults to the generated `run_id`
+- if `thread_id` is provided, it is persisted on the run and attached to emitted audit events
+- built-in stores can resolve active/latest runs per thread without an external thread map
+
 `await workflow.resume(run_id, decision)`:
 - applies approval decision
 - resumes blocked run
 - on reject => failed run + `ApprovalRejectedError`
+
+Thread helpers:
+- `await workflow.get_latest_run_state(thread_id)` prefers the active run for the thread, then falls back to the latest persisted run
+- `await workflow.resume_latest(thread_id, payload)` resolves the same target and resumes it
+- `await workflow.list_thread_runs(thread_id)` returns oldest-to-newest history for the thread
+- `await workflow.list_thread_pending_interrupts(thread_id)` aggregates pending interrupts across that thread
+
+### Containment modes
+
+- `local_dev`: existing host-executed behavior
+- `strict_remote`: remote-only execution for `remote_only` and `local_or_remote` executors
+
+In `strict_remote`, workflow construction fails if:
+- a step executor is `local_only`
+- an agent allowlists a `local_only` tool
+- remote-capable executors exist without a configured adapter
+
+### Remote execution contract
+
+Control-plane adapter:
+- `HTTPSandboxExecutionAdapter`
+
+Worker factory:
+- `create_sandbox_app(tool_registry=..., agent_registry=..., bearer_token=...)`
+
+Remote models:
+- `RemoteToolExecutionRequest`
+- `RemoteToolExecutionResponse`
+- `RemoteAgentExecutionRequest`
+- `RemoteAgentExecutionResponse`
+
+Worker registry resolution:
+- Python tools/agents resolve by `remote_name`
+- CLI commands are sent inline in the request
+
+Nested remote agent tool calls remain governed by the local runtime.
 
 ### Run statuses
 - `PENDING`
@@ -203,9 +265,18 @@ When blocked:
 - `pending_approval` populated
 - `approval_requested` event emitted
 
+Interrupt durability:
+- default interrupt persistence is in-memory
+- `InMemoryInterruptStore` preserves current behavior
+- `RedisInterruptStore` makes interrupts and per-run epochs restart-safe
+- runtime methods expose pending interrupt inspection without changing `resume(run_id, ...)`
+
 ## Audit Events
 
 Emitter default: `InMemoryAuditEmitter`.
+
+`AuditEvent` includes:
+- `thread_id: str | None`
 
 Important event categories:
 - run: start/complete/fail
@@ -225,6 +296,7 @@ Important event categories:
 - governance: `allowed_tools`, `allowed_handoffs`
 - limits: `max_turns`, `max_tool_calls`
 - execution metadata: `capabilities`, `side_effect`, `requires_approval`, `tags`
+- placement metadata: `execution_placement`, `remote_name`
 
 Agent handler signature:
 
@@ -254,7 +326,7 @@ Tool exceptions:
 Workflow exceptions:
 - `WorkflowDefinitionError`, `StepNotFoundError`
 - `IllegalTransitionError`, `BranchResolutionError`, `RoutingResolutionError`
-- `PolicyDeniedError`, `ApprovalRequiredError`, `ApprovalRejectedError`
+- `PolicyDeniedError`, `ApprovalRequiredError`, `ApprovalRejectedError`, `ContainmentPolicyError`
 
 Agent exceptions:
 - `AgentExecutionError`, `AgentToolNotAllowedError`, `AgentLimitExceededError`
@@ -263,5 +335,7 @@ Agent exceptions:
 
 - core runtime: [`governai/runtime/local.py`](../governai/runtime/local.py)
 - workflow model: [`governai/workflows/base.py`](../governai/workflows/base.py)
+- run stores: [`governai/runtime/run_store.py`](../governai/runtime/run_store.py)
+- interrupts: [`governai/runtime/interrupts.py`](../governai/runtime/interrupts.py)
 - tools: [`governai/tools/base.py`](../governai/tools/base.py)
 - agents: [`governai/agents/base.py`](../governai/agents/base.py)

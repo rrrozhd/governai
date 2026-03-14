@@ -24,7 +24,7 @@ python -m twine check dist/*
 2. Commit the version bump.
 3. Tag the release using the same version:
    ```bash
-   git tag v0.1.0
+   git tag v0.2.0
    ```
 4. Push branch and tags:
    ```bash

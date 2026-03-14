@@ -5,11 +5,13 @@ from typing import Any, Protocol
 
 class Executable(Protocol):
     name: str
+    remote_name: str
     description: str
     capabilities: list[str]
     side_effect: bool
     requires_approval: bool
     executor_type: str
+    execution_placement: str
 
     async def execute(self, ctx: Any, data: Any) -> Any:  # pragma: no cover - protocol
         """Execute."""

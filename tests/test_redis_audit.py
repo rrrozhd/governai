@@ -34,6 +34,7 @@ def test_redis_audit_emitter_round_trip() -> None:
         event = AuditEvent(
             event_id="e1",
             run_id="r1",
+            thread_id="thread-1",
             workflow_name="wf",
             event_type=EventType.RUN_STARTED,
             payload={"a": 1},
@@ -41,8 +42,8 @@ def test_redis_audit_emitter_round_trip() -> None:
         await emitter.emit(event)
         events = await emitter.events_for_run("r1")
         assert len(events) == 1
+        assert events[0].thread_id == "thread-1"
         assert events[0].payload == {"a": 1}
         await emitter.aclose()
 
     asyncio.run(run())
-

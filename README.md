@@ -39,6 +39,18 @@ Install from PyPI:
 pip install governai
 ```
 
+Install with sandbox worker dependencies:
+
+```bash
+pip install "governai[sandbox]"
+```
+
+Install with Redis-backed run and interrupt persistence:
+
+```bash
+pip install "governai[redis]"
+```
+
 Install directly from GitHub:
 
 ```bash
@@ -49,6 +61,18 @@ Local editable install for development:
 
 ```bash
 pip install -e .[dev]
+```
+
+Local editable install with sandbox service support:
+
+```bash
+pip install -e .[dev,sandbox]
+```
+
+Local editable install with Redis support:
+
+```bash
+pip install -e .[dev,redis]
 ```
 
 ## Quickstart
@@ -79,6 +103,14 @@ class MyFlow(Workflow[In, Out]):
     second = step("second", tool=double).then_end()
 
 # await MyFlow().run(In(value=2))
+```
+
+Thread-native execution is additive. If you omit `thread_id`, behavior stays exactly the same as before and the run uses its generated `run_id` as the thread identity.
+
+```python
+state = await MyFlow().run(In(value=2), thread_id="thread-123")
+latest = await MyFlow().get_latest_run_state("thread-123")
+history = await MyFlow().list_thread_runs("thread-123")
 ```
 
 ## Core Concepts
@@ -132,8 +164,97 @@ flow = governed_flow(spec)
 Core additions in this layer:
 - transport-agnostic execution backends (`AsyncBackend`, `ThreadPoolBackend`, `ProcessPoolBackend`)
 - persistence abstractions (`RunStore`, `InMemoryRunStore`, `RedisRunStore`)
-- interrupt contracts and manager (`InterruptManager`)
+- interrupt contracts and manager (`InterruptManager`, `InterruptStore`, `InMemoryInterruptStore`, `RedisInterruptStore`)
 - generic integration helpers (`GovernedHTTPClient`, provider error normalization)
+
+## Thread-Native Runs And Durable Interrupts
+
+GovernAI now supports caller-supplied thread identity and thread-aware resume helpers without breaking existing `run_id` flows.
+
+- `await flow.run(data, thread_id="thread-123")`
+- `await flow.get_latest_run_state("thread-123")`
+- `await flow.resume_latest("thread-123", payload)`
+- `await flow.list_thread_runs("thread-123")`
+
+Built-in stores now also support:
+
+- active/latest run lookup by thread in `InMemoryRunStore` and `RedisRunStore`
+- durable interrupt persistence in `InMemoryInterruptStore` and `RedisInterruptStore`
+- audit events that carry `thread_id` as a top-level field
+
+Minimal threaded resume example:
+
+```python
+from governai import ApprovalDecision, ApprovalDecisionType
+
+state = await flow.run(payload, thread_id="thread-123")
+latest = await flow.get_latest_run_state("thread-123")
+
+if latest.pending_approval:
+    latest = await flow.resume_latest(
+        "thread-123",
+        ApprovalDecision(
+            decision=ApprovalDecisionType.APPROVE,
+            decided_by="alice",
+        ),
+    )
+```
+
+Reference material:
+
+- Threading and interrupts guide: [`docs/threading.md`](docs/threading.md)
+- Minimal example: [`examples/thread_resume.py`](examples/thread_resume.py)
+
+## Contained Execution
+
+GovernAI now supports two runtime containment modes:
+
+- `local_dev`: default. Tools and agents execute on the host machine.
+- `strict_remote`: control plane stays local, but governed execution must go through a remote sandbox.
+
+Placement is configured per tool or agent:
+
+- `execution_placement="local_only"`: may only run on the host
+- `execution_placement="remote_only"`: must run through the remote adapter
+- `execution_placement="local_or_remote"`: local in `local_dev`, remote in `strict_remote`
+
+In `strict_remote`:
+
+- `local_only` executors are rejected at workflow construction time
+- nested agent tool calls stay governed by the local runtime
+- policies, approvals, audit, transitions, and run state remain local
+- CLI containment only exists when the CLI tool is routed through the sandbox
+
+Minimal control-plane setup:
+
+```python
+from governai import HTTPSandboxExecutionAdapter
+
+flow = MyFlow(
+    containment_mode="strict_remote",
+    remote_execution_adapter=HTTPSandboxExecutionAdapter(
+        base_url="https://sandbox.internal",
+        bearer_token="replace-me",
+    ),
+)
+```
+
+Worker-side setup:
+
+```python
+from governai import AgentRegistry, ToolRegistry, create_sandbox_app
+
+app = create_sandbox_app(
+    tool_registry=ToolRegistry(),
+    agent_registry=AgentRegistry(),
+    bearer_token="replace-me",
+)
+```
+
+Reference material:
+
+- Containment guide: [`docs/sandbox.md`](docs/sandbox.md)
+- End-to-end example: [`examples/strict_remote_sandbox.py`](examples/strict_remote_sandbox.py)
 
 ## Config And DSL Frontends
 
@@ -175,8 +296,11 @@ flow = governed_flow_from_dsl(
 ## Documentation
 
 - Documentation index: [`docs/USAGE.md`](docs/USAGE.md)
+- Changelog: [`CHANGELOG.md`](CHANGELOG.md)
+- Threading and interrupts guide: [`docs/threading.md`](docs/threading.md)
 - Quickstart: [`docs/quickstart.md`](docs/quickstart.md)
 - Patterns: [`docs/patterns.md`](docs/patterns.md)
+- Contained execution: [`docs/sandbox.md`](docs/sandbox.md)
 - API Reference: [`docs/reference.md`](docs/reference.md)
 - GitHub repository: [github.com/rrrozhd/governai](https://github.com/rrrozhd/governai)
 - PyPI package: [pypi.org/project/governai](https://pypi.org/project/governai/)
@@ -193,6 +317,12 @@ Config/DSL equivalent run:
 
 ```bash
 python examples/support_flow_from_definitions.py
+```
+
+Strict remote sandbox example:
+
+```bash
+python examples/strict_remote_sandbox.py
 ```
 
 This demonstrates:

@@ -35,3 +35,7 @@ class ApprovalRejectedError(WorkflowError):
 
 class PolicyDeniedError(WorkflowError):
     """Raised when policy denies execution."""
+
+
+class ContainmentPolicyError(WorkflowError):
+    """Raised when execution placement violates configured containment rules."""

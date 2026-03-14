@@ -1,0 +1,16 @@
+# Changelog
+
+## 0.2.0
+
+Release date: 2026-03-14
+
+Highlights:
+
+- Added contained HTTP sandbox execution with `local_dev` and `strict_remote` runtime modes.
+- Added per-executor placement controls for tools and agents.
+- Added typed remote execution request/response contracts and a first-party FastAPI sandbox worker.
+- Added thread-native execution with caller-supplied `thread_id`.
+- Added thread-aware run lookup and resume helpers across `Workflow` and `GovernedFlow`.
+- Added durable interrupt persistence with in-memory and Redis stores.
+- Added top-level `thread_id` propagation to audit events.
+- Expanded docs, examples, and regression coverage for containment, threading, and persistence.

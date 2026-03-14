@@ -71,6 +71,11 @@ def test_inmemory_run_store_round_trip() -> None:
         checkpoints = await store.list_checkpoints(src.thread_id)
         assert len(checkpoints) >= 1
         assert checkpoints[-1].run_id == "run1"
+        assert await store.get_latest_run_id(src.thread_id) == "run1"
+        await store.set_active_run_id(src.thread_id, src.run_id)
+        assert await store.get_active_run_id(src.thread_id) == src.run_id
+        await store.clear_active_run_id(src.thread_id, src.run_id)
+        assert await store.get_active_run_id(src.thread_id) is None
 
     asyncio.run(run())
 
@@ -86,8 +91,14 @@ def test_redis_run_store_with_injected_client() -> None:
         latest = await store.get_latest_checkpoint("thread-run2")
         assert latest is not None
         assert latest.run_id == "run2"
+        assert await store.get_latest_run_id("thread-run2") == "run2"
+        await store.set_active_run_id("thread-run2", "run2")
+        assert await store.get_active_run_id("thread-run2") == "run2"
+        await store.clear_active_run_id("thread-run2", "run2")
+        assert await store.get_active_run_id("thread-run2") is None
         await store.delete("run2")
         assert await store.get("run2") is None
+        assert await store.list_run_ids("thread-run2") == []
         await store.aclose()
 
     asyncio.run(run())

@@ -102,10 +102,13 @@ class Workflow(Generic[InputT, OutputT], metaclass=WorkflowMeta):
         run_store: Any = None,
         execution_backend: Any = None,
         interrupt_manager: Any = None,
+        interrupt_store: Any = None,
         interrupt_max_pending: int = 1,
         reducer_registry: Any = None,
         channel_reducers: dict[str, Any] | None = None,
         channel_defaults: dict[str, Any] | None = None,
+        containment_mode: str = "local_dev",
+        remote_execution_adapter: Any = None,
     ) -> None:
         """Initialize Workflow."""
         from governai.runtime.local import LocalRuntime
@@ -125,15 +128,21 @@ class Workflow(Generic[InputT, OutputT], metaclass=WorkflowMeta):
             run_store=run_store,
             execution_backend=execution_backend,
             interrupt_manager=interrupt_manager,
+            interrupt_store=interrupt_store,
             interrupt_max_pending=interrupt_max_pending,
             reducer_registry=reducer_registry,
             channel_reducers=channel_reducers,
             channel_defaults=channel_defaults,
+            containment_mode=containment_mode,
+            remote_execution_adapter=remote_execution_adapter,
         )
         if self.agent_registry is None:
             self.agent_registry = self.runtime.agent_registry
         else:
             self.runtime.agent_registry = self.agent_registry
+        validator = getattr(self.runtime, "validate_workflow", None)
+        if validator is not None:
+            validator(self)
 
     @property
     def name(self) -> str:
@@ -160,9 +169,9 @@ class Workflow(Generic[InputT, OutputT], metaclass=WorkflowMeta):
             raise StepNotFoundError(f"Step not found: {name}")
         return step_def
 
-    async def run(self, data: InputT) -> RunState:
+    async def run(self, data: InputT, *, thread_id: str | None = None) -> RunState:
         """Run."""
-        return await self.runtime.run_workflow(self, data)
+        return await self.runtime.run_workflow(self, data, thread_id=thread_id)
 
     async def resume(
         self, run_id: str, payload: ResumePayload | ApprovalDecision | str | dict[str, Any]
@@ -184,6 +193,58 @@ class Workflow(Generic[InputT, OutputT], metaclass=WorkflowMeta):
         if getter is None:
             return self.get_run_state(run_id)
         return await getter(run_id)
+
+    async def get_latest_run_state(self, thread_id: str) -> RunState:
+        """Return the active or latest run state for one thread."""
+        getter = getattr(self.runtime, "get_latest_run_state", None)
+        if getter is None:
+            raise NotImplementedError("runtime does not support thread-aware run lookup")
+        return await getter(thread_id)
+
+    async def resume_latest(
+        self, thread_id: str, payload: ResumePayload | ApprovalDecision | str | dict[str, Any]
+    ) -> RunState:
+        """Resume the active or latest run for one thread."""
+        resumer = getattr(self.runtime, "resume_latest_workflow", None)
+        if resumer is not None:
+            return await resumer(self, thread_id, payload)
+        state = await self.get_latest_run_state(thread_id)
+        return await self.resume(state.run_id, payload)
+
+    async def list_thread_runs(self, thread_id: str) -> list[RunState]:
+        """List persisted run states for one thread."""
+        getter = getattr(self.runtime, "list_thread_runs", None)
+        if getter is None:
+            raise NotImplementedError("runtime does not support thread-aware run lookup")
+        return await getter(thread_id)
+
+    async def list_pending_interrupts(self, run_id: str):
+        """List pending interrupts for one run."""
+        getter = getattr(self.runtime, "list_pending_interrupts", None)
+        if getter is None:
+            raise NotImplementedError("runtime does not support interrupt inspection")
+        return await getter(run_id)
+
+    async def get_pending_interrupt(self, run_id: str, interrupt_id: str):
+        """Return one pending interrupt for one run."""
+        getter = getattr(self.runtime, "get_pending_interrupt", None)
+        if getter is None:
+            raise NotImplementedError("runtime does not support interrupt inspection")
+        return await getter(run_id, interrupt_id)
+
+    async def get_latest_pending_interrupt(self, run_id: str):
+        """Return the newest pending interrupt for one run."""
+        getter = getattr(self.runtime, "get_latest_pending_interrupt", None)
+        if getter is None:
+            raise NotImplementedError("runtime does not support interrupt inspection")
+        return await getter(run_id)
+
+    async def list_thread_pending_interrupts(self, thread_id: str):
+        """List pending interrupts across one thread."""
+        getter = getattr(self.runtime, "list_thread_pending_interrupts", None)
+        if getter is None:
+            raise NotImplementedError("runtime does not support interrupt inspection")
+        return await getter(thread_id)
 
     def _register_step_executors(self) -> None:
         """Internal helper to register step executors."""

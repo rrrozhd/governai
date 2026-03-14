@@ -91,13 +91,29 @@ from governai.integrations import (
     parse_provider_error,
 )
 from governai.extensions import (
+    HTTPSandboxExecutionAdapter,
+    RemoteAgentExecutionRequest,
+    RemoteAgentExecutionResponse,
     RemoteCheckpointAdapter,
     RemoteExecutionAdapter,
+    RemoteExecutionError,
+    RemoteExecutionFailure,
     RemoteExecutionFactory,
+    RemoteToolCallRequest,
+    RemoteToolExecutionRequest,
+    RemoteToolExecutionResponse,
 )
-from governai.runtime.interrupts import InterruptManager, InterruptRequest, InterruptResolution
+from governai.runtime.interrupts import (
+    InMemoryInterruptStore,
+    InterruptManager,
+    InterruptRequest,
+    InterruptResolution,
+    InterruptStore,
+    RedisInterruptStore,
+)
 from governai.runtime.reducers import Reducer, ReducerRegistry
-from governai.runtime.run_store import InMemoryRunStore, RedisRunStore, RunStore
+from governai.runtime.run_store import InMemoryRunStore, RedisRunStore, RunStore, ThreadAwareRunStore
+from governai.sandbox import create_sandbox_app
 from governai.skills.base import Skill
 from governai.skills.registry import SkillRegistry
 from governai.tools.base import (
@@ -105,6 +121,7 @@ from governai.tools.base import (
     CLIToolOutputError,
     CLIToolProcessError,
     CLIToolTimeoutError,
+    ExecutionPlacement,
     Tool,
     ToolError,
     ToolExecutionError,
@@ -118,6 +135,7 @@ from governai.workflows.exceptions import (
     ApprovalRejectedError,
     ApprovalRequiredError,
     BranchResolutionError,
+    ContainmentPolicyError,
     IllegalTransitionError,
     PolicyDeniedError,
     RoutingResolutionError,
@@ -145,6 +163,7 @@ __all__ = [
     "AsyncBackend",
     "AuditEvent",
     "BranchResolutionError",
+    "ContainmentPolicyError",
     "ChannelConfigV1",
     "ChannelSpec",
     "CLIToolError",
@@ -161,6 +180,7 @@ __all__ = [
     "END_STEP",
     "EventType",
     "ExecutionBackend",
+    "ExecutionPlacement",
     "FlowConfigError",
     "FlowConfigLoadError",
     "FlowConfigV1",
@@ -175,6 +195,7 @@ __all__ = [
     "HTTPResponse",
     "IllegalTransitionError",
     "InMemoryAuditEmitter",
+    "InMemoryInterruptStore",
     "InMemoryRunStore",
     "InterruptConfigV1",
     "InterruptContract",
@@ -182,6 +203,7 @@ __all__ = [
     "InterruptManager",
     "InterruptRequest",
     "InterruptResolution",
+    "InterruptStore",
     "InvalidTransitionError",
     "MappingPolicyResolver",
     "NormalizedLLMResponse",
@@ -196,13 +218,22 @@ __all__ = [
     "Reducer",
     "ReducerRegistry",
     "RedisAuditEmitter",
+    "RedisInterruptStore",
     "RedisRunStore",
     "RegistryAgentResolver",
     "RegistrySkillResolver",
     "RegistryToolResolver",
+    "HTTPSandboxExecutionAdapter",
+    "RemoteAgentExecutionRequest",
+    "RemoteAgentExecutionResponse",
     "RemoteCheckpointAdapter",
     "RemoteExecutionAdapter",
+    "RemoteExecutionError",
+    "RemoteExecutionFailure",
     "RemoteExecutionFactory",
+    "RemoteToolCallRequest",
+    "RemoteToolExecutionRequest",
+    "RemoteToolExecutionResponse",
     "ResumeApproval",
     "ResumeInterrupt",
     "ResumePayload",
@@ -222,6 +253,7 @@ __all__ = [
     "ToolRegistry",
     "ToolResolver",
     "ToolValidationError",
+    "ThreadAwareRunStore",
     "TransitionConfigV1",
     "TransitionSpec",
     "UnknownAgentError",
@@ -235,6 +267,7 @@ __all__ = [
     "branch",
     "build_tool_message",
     "call",
+    "create_sandbox_app",
     "dsl_to_flow_config",
     "end",
     "extract_tool_calls",

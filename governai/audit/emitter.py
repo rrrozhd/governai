@@ -19,6 +19,7 @@ async def emit_event(
     emitter: AuditEmitter,
     *,
     run_id: str,
+    thread_id: str | None = None,
     workflow_name: str,
     event_type: EventType,
     step_name: str | None = None,
@@ -28,6 +29,7 @@ async def emit_event(
     event = AuditEvent(
         event_id=str(uuid.uuid4()),
         run_id=run_id,
+        thread_id=thread_id,
         workflow_name=workflow_name,
         step_name=step_name,
         event_type=event_type,

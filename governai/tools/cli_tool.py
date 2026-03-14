@@ -8,6 +8,7 @@ from governai.tools.base import (
     CLIToolOutputError,
     CLIToolProcessError,
     CLIToolTimeoutError,
+    ExecutionPlacement,
     InModelT,
     OutModelT,
     Tool,
@@ -30,6 +31,8 @@ class CLITool(Tool[InModelT, OutModelT]):
         timeout_seconds: float | None = None,
         requires_approval: bool = False,
         tags: list[str] | None = None,
+        execution_placement: ExecutionPlacement = "local_only",
+        remote_name: str | None = None,
     ) -> None:
         """Initialize CLITool."""
         if not command:
@@ -50,6 +53,8 @@ class CLITool(Tool[InModelT, OutModelT]):
             requires_approval=requires_approval,
             tags=tags,
             executor_type="cli",
+            execution_placement=execution_placement,
+            remote_name=remote_name,
         )
         self.command = command
         self.input_mode = input_mode

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import uuid
 from copy import deepcopy
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ValidationError
 
@@ -12,6 +13,13 @@ from governai.agents.exceptions import AgentExecutionError
 from governai.approvals.engine import ApprovalEngine
 from governai.audit.emitter import emit_event
 from governai.audit.memory import InMemoryAuditEmitter
+from governai.execution.backends import AsyncBackend, ExecutionBackend
+from governai.extensions.remote import (
+    RemoteAgentExecutionRequest,
+    RemoteExecutionAdapter,
+    RemoteExecutionError,
+    RemoteToolExecutionRequest,
+)
 from governai.models.approval import ApprovalDecision, ApprovalDecisionType
 from governai.models.command import Command
 from governai.models.common import DeterminismMode, END_STEP, EventType, RunStatus
@@ -21,13 +29,14 @@ from governai.models.run_state import RunState
 from governai.policies.base import run_policy
 from governai.policies.engine import PolicyEngine
 from governai.runtime.context import ExecutionContext
-from governai.runtime.interrupts import InterruptManager
+from governai.runtime.interrupts import InterruptManager, InterruptRequest
 from governai.runtime.reducers import Reducer, ReducerRegistry
-from governai.runtime.run_store import InMemoryRunStore, RunStore
-from governai.tools.base import Tool
+from governai.runtime.run_store import InMemoryRunStore, RunStore, ThreadAwareRunStore
+from governai.tools.base import Tool, ToolValidationError
 from governai.workflows.exceptions import (
     ApprovalRejectedError,
     ApprovalRequiredError,
+    ContainmentPolicyError,
     IllegalTransitionError,
     PolicyDeniedError,
 )
@@ -37,7 +46,7 @@ from governai.workflows.transitions import (
     RuleBasedTransition,
     StrictTransition,
 )
-from governai.execution.backends import AsyncBackend, ExecutionBackend
+ContainmentMode = Literal["local_dev", "strict_remote"]
 
 
 class LocalRuntime:
@@ -50,10 +59,13 @@ class LocalRuntime:
         run_store: RunStore | None = None,
         execution_backend: ExecutionBackend | None = None,
         interrupt_manager: InterruptManager | None = None,
+        interrupt_store: Any = None,
         interrupt_max_pending: int = 1,
         reducer_registry: ReducerRegistry | None = None,
         channel_reducers: dict[str, str | Reducer] | None = None,
         channel_defaults: dict[str, Any] | None = None,
+        containment_mode: ContainmentMode = "local_dev",
+        remote_execution_adapter: RemoteExecutionAdapter | None = None,
     ) -> None:
         """Initialize the local in-process runtime with governance defaults."""
         from governai.agents.registry import AgentRegistry
@@ -64,12 +76,42 @@ class LocalRuntime:
         self.agent_registry = AgentRegistry()
         self.run_store = run_store or InMemoryRunStore()
         self.execution_backend = execution_backend or AsyncBackend()
-        self.interrupt_manager = interrupt_manager or InterruptManager()
+        self.interrupt_manager = interrupt_manager or InterruptManager(store=interrupt_store)
         self.interrupt_max_pending = max(0, int(interrupt_max_pending))
         self.reducer_registry = reducer_registry or ReducerRegistry()
         self.channel_reducers = dict(channel_reducers or {})
         self.channel_defaults = dict(channel_defaults or {})
+        self.containment_mode = containment_mode
+        self.remote_execution_adapter = remote_execution_adapter
         self._runs: dict[str, RunState] = {}
+
+    def validate_workflow(self, workflow: Any) -> None:
+        """Fail fast when workflow placement violates configured containment rules."""
+        remote_capable = False
+        for step in workflow.steps.values():
+            executable = step.executor
+            placement = getattr(executable, "execution_placement", "local_only")
+            if placement != "local_only":
+                remote_capable = True
+            if self.containment_mode == "strict_remote" and placement == "local_only":
+                raise ContainmentPolicyError(
+                    f"Step {step.name} executor {executable.name} is local_only in strict_remote mode"
+                )
+            if step.agent is None:
+                continue
+            for tool_name in step.agent.allowed_tools:
+                tool = workflow.tool_registry.get(tool_name)
+                tool_placement = getattr(tool, "execution_placement", "local_only")
+                if tool_placement != "local_only":
+                    remote_capable = True
+                if self.containment_mode == "strict_remote" and tool_placement == "local_only":
+                    raise ContainmentPolicyError(
+                        f"Agent {step.agent.name} allowlists local_only tool {tool.name} in strict_remote mode"
+                    )
+        if remote_capable and self.remote_execution_adapter is None:
+            raise ContainmentPolicyError(
+                "Remote-capable executors require remote_execution_adapter to be configured"
+            )
 
     def get_run_state(self, run_id: str) -> RunState:
         """Return in-memory run state for a known run id."""
@@ -82,14 +124,53 @@ class LocalRuntime:
         """Return run state, loading it from the configured store when needed."""
         return await self._load_state(run_id)
 
-    async def run_workflow(self, workflow: Any, data: Any) -> RunState:
+    async def get_latest_run_state(self, thread_id: str) -> RunState:
+        """Return the active or latest run state for one thread."""
+        run_id = await self._get_thread_target_run_id(thread_id)
+        return await self._load_state(run_id)
+
+    async def list_thread_runs(self, thread_id: str) -> list[RunState]:
+        """List all persisted run states for one thread in oldest-to-newest order."""
+        store = self._thread_aware_run_store()
+        out: list[RunState] = []
+        for run_id in await store.list_run_ids(thread_id):
+            out.append(await self._load_state(run_id))
+        return out
+
+    async def resume_latest_workflow(self, workflow: Any, thread_id: str, payload: Any) -> RunState:
+        """Resume the active or latest run for one thread."""
+        state = await self.get_latest_run_state(thread_id)
+        return await self.resume_workflow(workflow, state.run_id, payload)
+
+    async def list_pending_interrupts(self, run_id: str) -> list[InterruptRequest]:
+        """List pending interrupts for one run."""
+        return await self._interrupt_list_pending(run_id)
+
+    async def get_pending_interrupt(self, run_id: str, interrupt_id: str) -> InterruptRequest | None:
+        """Return one pending interrupt by run and interrupt id."""
+        return await self._interrupt_get_pending(run_id, interrupt_id)
+
+    async def get_latest_pending_interrupt(self, run_id: str) -> InterruptRequest | None:
+        """Return the newest pending interrupt for one run."""
+        return await self._interrupt_get_latest_pending(run_id)
+
+    async def list_thread_pending_interrupts(self, thread_id: str) -> list[InterruptRequest]:
+        """List pending interrupts across all runs in one thread."""
+        store = self._thread_aware_run_store()
+        pending: list[InterruptRequest] = []
+        for run_id in await store.list_run_ids(thread_id):
+            pending.extend(await self.list_pending_interrupts(run_id))
+        pending.sort(key=lambda item: (item.created_at, item.interrupt_id))
+        return pending
+
+    async def run_workflow(self, workflow: Any, data: Any, *, thread_id: str | None = None) -> RunState:
         """Start a new workflow run and advance until blocked or completed."""
         # Every run starts with a fresh epoch for interrupt race protection.
         run_id = str(uuid.uuid4())
-        epoch = self.interrupt_manager.bump_epoch(run_id)
+        epoch = await self._interrupt_bump_epoch(run_id)
         state = RunState(
             run_id=run_id,
-            thread_id=run_id,
+            thread_id=thread_id,
             epoch=epoch,
             workflow_name=workflow.name,
             status=RunStatus.PENDING,
@@ -98,10 +179,10 @@ class LocalRuntime:
         )
         self._runs[run_id] = state
         await self._persist_state(state)
+        await self._register_active_run(state)
         payload = self._to_payload(data)
 
-        await emit_event(
-            self.audit_emitter,
+        await self._emit_audit_event(
             run_id=run_id,
             workflow_name=workflow.name,
             event_type=EventType.RUN_STARTED,
@@ -142,12 +223,12 @@ class LocalRuntime:
         restored.status = RunStatus.RUNNING
         restored.metadata.pop("pending_input", None)
         restored.metadata.pop("pending_interrupt_resume", None)
-        restored.epoch = self.interrupt_manager.bump_epoch(run_id)
+        restored.epoch = await self._interrupt_bump_epoch(run_id)
         restored.touch()
         await self._persist_state(restored)
+        await self._register_active_run(restored)
 
-        await emit_event(
-            self.audit_emitter,
+        await self._emit_audit_event(
             run_id=restored.run_id,
             workflow_name=restored.workflow_name,
             event_type=EventType.CHECKPOINT_RESTORED,
@@ -156,8 +237,7 @@ class LocalRuntime:
                 "thread_id": restored.thread_id,
             },
         )
-        await emit_event(
-            self.audit_emitter,
+        await self._emit_audit_event(
             run_id=restored.run_id,
             workflow_name=restored.workflow_name,
             event_type=EventType.RUN_STARTED,
@@ -182,9 +262,8 @@ class LocalRuntime:
 
         normalized = self.approval_engine.normalize_decision(payload.decision)
         if normalized.decision == ApprovalDecisionType.REJECT:
-            await emit_event(
-                self.audit_emitter,
-                run_id=state.run_id,
+            await self._emit_audit_event(
+            run_id=state.run_id,
                 workflow_name=state.workflow_name,
                 step_name=state.current_step,
                 event_type=EventType.APPROVAL_REJECTED,
@@ -195,9 +274,8 @@ class LocalRuntime:
             state.pending_approval = None
             state.touch()
             await self._persist_state(state)
-            await emit_event(
-                self.audit_emitter,
-                run_id=state.run_id,
+            await self._emit_audit_event(
+            run_id=state.run_id,
                 workflow_name=state.workflow_name,
                 event_type=EventType.RUN_FAILED,
                 payload={"error": state.error},
@@ -210,8 +288,7 @@ class LocalRuntime:
         state.metadata["approved_steps"] = sorted(approved_steps)
         pending_payload = state.metadata.pop("pending_input", None)
 
-        await emit_event(
-            self.audit_emitter,
+        await self._emit_audit_event(
             run_id=state.run_id,
             workflow_name=state.workflow_name,
             step_name=state.current_step,
@@ -235,7 +312,7 @@ class LocalRuntime:
             raise ApprovalRequiredError("Interrupt resume requires ResumeInterrupt payload")
 
         try:
-            resolution = self.interrupt_manager.resolve(
+            resolution = await self._interrupt_resolve(
                 run_id=state.run_id,
                 interrupt_id=payload.interrupt_id,
                 response=payload.response,
@@ -244,9 +321,8 @@ class LocalRuntime:
         except ValueError as exc:
             message = str(exc)
             event = EventType.INTERRUPT_EXPIRED if "expired" in message else EventType.INTERRUPT_REJECTED_EPOCH
-            await emit_event(
-                self.audit_emitter,
-                run_id=state.run_id,
+            await self._emit_audit_event(
+            run_id=state.run_id,
                 workflow_name=state.workflow_name,
                 step_name=state.current_step,
                 event_type=event,
@@ -256,11 +332,10 @@ class LocalRuntime:
 
         state.pending_interrupt_id = None
         state.status = RunStatus.RUNNING
-        state.epoch = self.interrupt_manager.bump_epoch(state.run_id)
+        state.epoch = await self._interrupt_bump_epoch(state.run_id)
         state.touch()
         await self._persist_state(state)
-        await emit_event(
-            self.audit_emitter,
+        await self._emit_audit_event(
             run_id=state.run_id,
             workflow_name=state.workflow_name,
             step_name=state.current_step,
@@ -299,9 +374,8 @@ class LocalRuntime:
             state.status = RunStatus.COMPLETED
             state.touch()
             await self._persist_state(state)
-            await emit_event(
-                self.audit_emitter,
-                run_id=state.run_id,
+            await self._emit_audit_event(
+            run_id=state.run_id,
                 workflow_name=state.workflow_name,
                 event_type=EventType.RUN_COMPLETED,
                 payload={"completed_steps": list(state.completed_steps)},
@@ -322,9 +396,8 @@ class LocalRuntime:
                 state.status = RunStatus.COMPLETED
                 state.touch()
                 await self._persist_state(state)
-                await emit_event(
-                    self.audit_emitter,
-                    run_id=state.run_id,
+                await self._emit_audit_event(
+            run_id=state.run_id,
                     workflow_name=state.workflow_name,
                     event_type=EventType.RUN_COMPLETED,
                     payload={"completed_steps": list(state.completed_steps)},
@@ -332,9 +405,8 @@ class LocalRuntime:
                 return state
 
             step = workflow.get_step(step_name)
-            await emit_event(
-                self.audit_emitter,
-                run_id=state.run_id,
+            await self._emit_audit_event(
+            run_id=state.run_id,
                 workflow_name=state.workflow_name,
                 step_name=step.name,
                 event_type=EventType.STEP_ENTERED,
@@ -359,9 +431,8 @@ class LocalRuntime:
                 state.metadata["pending_input"] = self._to_payload(payload)
                 state.touch()
                 await self._persist_state(state)
-                await emit_event(
-                    self.audit_emitter,
-                    run_id=state.run_id,
+                await self._emit_audit_event(
+            run_id=state.run_id,
                     workflow_name=state.workflow_name,
                     step_name=step.name,
                     event_type=EventType.APPROVAL_REQUESTED,
@@ -386,9 +457,8 @@ class LocalRuntime:
                 state.error = str(exc)
                 state.touch()
                 await self._persist_state(state)
-                await emit_event(
-                    self.audit_emitter,
-                    run_id=state.run_id,
+                await self._emit_audit_event(
+            run_id=state.run_id,
                     workflow_name=state.workflow_name,
                     step_name=step.name,
                     event_type=EventType.RUN_FAILED,
@@ -428,9 +498,8 @@ class LocalRuntime:
                 state.metadata["pending_input"] = self._to_payload(payload)
                 state.touch()
                 await self._persist_state(state)
-                await emit_event(
-                    self.audit_emitter,
-                    run_id=state.run_id,
+                await self._emit_audit_event(
+            run_id=state.run_id,
                     workflow_name=state.workflow_name,
                     step_name=step.name,
                     event_type=EventType.APPROVAL_REQUESTED,
@@ -442,9 +511,8 @@ class LocalRuntime:
                 state.error = str(exc)
                 state.touch()
                 await self._persist_state(state)
-                await emit_event(
-                    self.audit_emitter,
-                    run_id=state.run_id,
+                await self._emit_audit_event(
+            run_id=state.run_id,
                     workflow_name=state.workflow_name,
                     step_name=step.name,
                     event_type=EventType.RUN_FAILED,
@@ -473,7 +541,7 @@ class LocalRuntime:
 
             if command is not None and command.interrupt is not None:
                 # Command interrupts are runtime-level user questions (non-approval).
-                request = self.interrupt_manager.create(
+                request = await self._interrupt_create(
                     run_id=state.run_id,
                     step_name=step.name,
                     message=command.interrupt.message,
@@ -492,9 +560,8 @@ class LocalRuntime:
                 }
                 state.touch()
                 await self._persist_state(state)
-                await emit_event(
-                    self.audit_emitter,
-                    run_id=state.run_id,
+                await self._emit_audit_event(
+            run_id=state.run_id,
                     workflow_name=state.workflow_name,
                     step_name=step.name,
                     event_type=EventType.INTERRUPT_REQUESTED,
@@ -518,9 +585,8 @@ class LocalRuntime:
                 )
             except Exception as exc:
                 if handoff_agent is not None:
-                    await emit_event(
-                        self.audit_emitter,
-                        run_id=state.run_id,
+                    await self._emit_audit_event(
+            run_id=state.run_id,
                         workflow_name=state.workflow_name,
                         step_name=step.name,
                         event_type=EventType.AGENT_HANDOFF_REJECTED,
@@ -530,9 +596,8 @@ class LocalRuntime:
                 state.error = str(exc)
                 state.touch()
                 await self._persist_state(state)
-                await emit_event(
-                    self.audit_emitter,
-                    run_id=state.run_id,
+                await self._emit_audit_event(
+            run_id=state.run_id,
                     workflow_name=state.workflow_name,
                     step_name=step.name,
                     event_type=EventType.RUN_FAILED,
@@ -552,9 +617,8 @@ class LocalRuntime:
                 state.status = RunStatus.COMPLETED
                 state.touch()
                 await self._persist_state(state)
-                await emit_event(
-                    self.audit_emitter,
-                    run_id=state.run_id,
+                await self._emit_audit_event(
+            run_id=state.run_id,
                     workflow_name=state.workflow_name,
                     event_type=EventType.RUN_COMPLETED,
                     payload={"completed_steps": list(state.completed_steps)},
@@ -613,9 +677,8 @@ class LocalRuntime:
         """Run all policies for a workflow and raise on first deny decision."""
         for policy_name, policy_func in self.policy_engine.policies_for(workflow.name):
             decision = await run_policy(policy_func, ctx)
-            await emit_event(
-                self.audit_emitter,
-                run_id=state.run_id,
+            await self._emit_audit_event(
+            run_id=state.run_id,
                 workflow_name=state.workflow_name,
                 step_name=step_name,
                 event_type=EventType.POLICY_CHECKED,
@@ -627,9 +690,8 @@ class LocalRuntime:
                 },
             )
             if not decision.allow:
-                await emit_event(
-                    self.audit_emitter,
-                    run_id=state.run_id,
+                await self._emit_audit_event(
+            run_id=state.run_id,
                     workflow_name=state.workflow_name,
                     step_name=step_name,
                     event_type=EventType.POLICY_DENIED,
@@ -656,8 +718,7 @@ class LocalRuntime:
             event_completed = EventType.AGENT_TOOL_CALL_COMPLETED
             event_failed = EventType.AGENT_TOOL_CALL_FAILED
 
-        await emit_event(
-            self.audit_emitter,
+        await self._emit_audit_event(
             run_id=state.run_id,
             workflow_name=state.workflow_name,
             step_name=step_name,
@@ -676,11 +737,18 @@ class LocalRuntime:
         )
 
         try:
-            output = await self.execution_backend.call(tool.execute, context, payload)
+            if self._should_execute_remotely(tool):
+                output = await self._execute_tool_remote(
+                    state=state,
+                    step_name=step_name,
+                    tool=tool,
+                    payload=payload,
+                )
+            else:
+                output = await self.execution_backend.call(tool.execute, context, payload)
         except Exception:
-            await emit_event(
-                self.audit_emitter,
-                run_id=state.run_id,
+            await self._emit_audit_event(
+            run_id=state.run_id,
                 workflow_name=state.workflow_name,
                 step_name=step_name,
                 event_type=event_failed,
@@ -689,8 +757,7 @@ class LocalRuntime:
             raise
 
         payload_out, command = self._extract_command(output)
-        await emit_event(
-            self.audit_emitter,
+        await self._emit_audit_event(
             run_id=state.run_id,
             workflow_name=state.workflow_name,
             step_name=step_name,
@@ -698,6 +765,50 @@ class LocalRuntime:
             payload={"tool_name": tool.name},
         )
         return payload_out, command
+
+    async def _execute_tool_remote(
+        self,
+        *,
+        state: RunState,
+        step_name: str,
+        tool: Tool,
+        payload: Any,
+    ) -> dict[str, Any]:
+        """Execute one tool through the configured remote sandbox."""
+        adapter = self._require_remote_adapter()
+        try:
+            validated_input = tool.input_model.model_validate(payload)
+        except ValidationError as exc:
+            raise ToolValidationError(f"Input validation failed for {tool.name}: {exc}") from exc
+        request = RemoteToolExecutionRequest(
+            run_id=state.run_id,
+            workflow_name=state.workflow_name,
+            step_name=step_name,
+            executor_name=tool.remote_name,
+            executor_type=tool.executor_type,
+            input_payload=validated_input.model_dump(mode="json"),
+            artifacts=deepcopy(state.artifacts),
+            channels=deepcopy(state.channels),
+            metadata=deepcopy(state.metadata),
+            tool_kind=tool.executor_type,
+            command=list(getattr(tool, "command", [])) if getattr(tool, "command", None) is not None else None,
+            timeout_seconds=tool.timeout_seconds,
+            capabilities=list(getattr(tool, "capabilities", [])),
+            side_effect=bool(getattr(tool, "side_effect", False)),
+            requires_approval=bool(getattr(tool, "requires_approval", False)),
+        )
+        response = await adapter.execute_tool(request)
+        if response.error is not None:
+            raise RemoteExecutionError(
+                f"Remote tool execution failed for {tool.name}: {response.error.message}",
+                code=response.error.code,
+                details=response.error.details,
+            )
+        try:
+            validated_output = tool.output_model.model_validate(response.output_payload or {})
+        except ValidationError as exc:
+            raise ToolValidationError(f"Output validation failed for {tool.name}: {exc}") from exc
+        return validated_output.model_dump(mode="json")
 
     async def _execute_agent(
         self,
@@ -709,8 +820,7 @@ class LocalRuntime:
         payload: Any,
     ) -> tuple[dict[str, Any], str | None, Command | None]:
         """Execute one agent step, including optional handoff validation."""
-        await emit_event(
-            self.audit_emitter,
+        await self._emit_audit_event(
             run_id=state.run_id,
             workflow_name=state.workflow_name,
             step_name=step_name,
@@ -746,11 +856,27 @@ class LocalRuntime:
         )
 
         try:
+            if self._should_execute_remotely(agent):
+                output_payload, handoff_target, command = await self._execute_agent_remote(
+                    state=state,
+                    workflow=workflow,
+                    step_name=step_name,
+                    agent=agent,
+                    payload=payload,
+                )
+                await self._emit_audit_event(
+            run_id=state.run_id,
+                    workflow_name=state.workflow_name,
+                    step_name=step_name,
+                    event_type=EventType.AGENT_COMPLETED,
+                    payload={"agent_name": agent.name, "status": "remote"},
+                )
+                return output_payload, handoff_target, command
+
             result = await agent.execute(agent_context, payload)
         except Exception:
-            await emit_event(
-                self.audit_emitter,
-                run_id=state.run_id,
+            await self._emit_audit_event(
+            run_id=state.run_id,
                 workflow_name=state.workflow_name,
                 step_name=step_name,
                 event_type=EventType.AGENT_FAILED,
@@ -767,18 +893,16 @@ class LocalRuntime:
         handoff_target = None
         if result.status == "handoff":
             handoff_target = result.next_agent
-            await emit_event(
-                self.audit_emitter,
-                run_id=state.run_id,
+            await self._emit_audit_event(
+            run_id=state.run_id,
                 workflow_name=state.workflow_name,
                 step_name=step_name,
                 event_type=EventType.AGENT_HANDOFF_PROPOSED,
                 payload={"agent_name": agent.name, "next_agent": handoff_target},
             )
             if handoff_target and not workflow.agent_registry.has(handoff_target):
-                await emit_event(
-                    self.audit_emitter,
-                    run_id=state.run_id,
+                await self._emit_audit_event(
+            run_id=state.run_id,
                     workflow_name=state.workflow_name,
                     step_name=step_name,
                     event_type=EventType.AGENT_HANDOFF_REJECTED,
@@ -786,8 +910,7 @@ class LocalRuntime:
                 )
                 raise AgentExecutionError(f"Unknown handoff target agent: {handoff_target}")
 
-        await emit_event(
-            self.audit_emitter,
+        await self._emit_audit_event(
             run_id=state.run_id,
             workflow_name=state.workflow_name,
             step_name=step_name,
@@ -795,6 +918,110 @@ class LocalRuntime:
             payload={"agent_name": agent.name, "status": result.status},
         )
         return output_payload, handoff_target, command
+
+    async def _execute_agent_remote(
+        self,
+        *,
+        state: RunState,
+        workflow: Any,
+        step_name: str,
+        agent: Agent,
+        payload: Any,
+    ) -> tuple[dict[str, Any], str | None, Command | None]:
+        """Execute one agent through the configured remote sandbox."""
+        adapter = self._require_remote_adapter()
+        try:
+            validated_input = agent.input_model.model_validate(payload)
+        except ValidationError as exc:
+            raise AgentExecutionError(f"Agent input validation failed for {agent.name}: {exc}") from exc
+        validated_payload = validated_input.model_dump(mode="json")
+        tool_calls_used = 0
+        resume_tool_name: str | None = None
+        resume_tool_result: dict[str, Any] | None = None
+
+        while True:
+            request = RemoteAgentExecutionRequest(
+                run_id=state.run_id,
+                workflow_name=state.workflow_name,
+                step_name=step_name,
+                executor_name=agent.remote_name,
+                input_payload=validated_payload,
+                artifacts=deepcopy(state.artifacts),
+                channels=deepcopy(state.channels),
+                metadata=deepcopy(state.metadata),
+                instruction=agent.instruction,
+                allowed_tools=list(agent.allowed_tools),
+                allowed_handoffs=list(agent.allowed_handoffs),
+                max_tool_calls=agent.max_tool_calls,
+                tool_calls_used=tool_calls_used,
+                resume_tool_name=resume_tool_name,
+                resume_tool_result=resume_tool_result,
+            )
+            response = await adapter.execute_agent(request)
+            # Resume payloads are one-shot; clear them after each remote turn.
+            resume_tool_name = None
+            resume_tool_result = None
+            if response.error is not None:
+                raise AgentExecutionError(
+                    f"Remote agent execution failed for {agent.name}: {response.error.message}"
+                )
+            if response.status == "tool_call":
+                tool_call = response.requested_tool_call
+                assert tool_call is not None
+                if tool_call.tool_name not in agent.allowed_tools:
+                    raise AgentExecutionError(
+                        f"Remote agent {agent.name} requested disallowed tool {tool_call.tool_name}"
+                    )
+                if tool_calls_used >= agent.max_tool_calls:
+                    raise AgentExecutionError(
+                        f"Remote agent {agent.name} exceeded max_tool_calls={agent.max_tool_calls}"
+                    )
+                resume_tool_result = await self.execute_named_tool(
+                    state=state,
+                    workflow=workflow,
+                    step_name=step_name,
+                    tool_name=tool_call.tool_name,
+                    payload=tool_call.payload,
+                )
+                tool_calls_used += 1
+                resume_tool_name = tool_call.tool_name
+                continue
+            if response.status == "needs_approval":
+                raise ApprovalRequiredError(response.reason or f"Agent {agent.name} requested approval")
+            if response.status == "failed":
+                raise AgentExecutionError(response.reason or f"Agent {agent.name} failed")
+
+            payload_out = response.output_payload or {}
+            if response.status == "final":
+                try:
+                    validated_output = agent.output_model.model_validate(payload_out)
+                except ValidationError as exc:
+                    raise AgentExecutionError(f"Agent output validation failed for {agent.name}: {exc}") from exc
+                payload_out = validated_output.model_dump(mode="json")
+            output_payload, command = self._extract_command(payload_out)
+            handoff_target = response.next_agent if response.status == "handoff" else None
+            if handoff_target is not None:
+                if handoff_target not in agent.allowed_handoffs:
+                    raise AgentExecutionError(
+                        f"Remote agent {agent.name} attempted disallowed handoff to {handoff_target}"
+                    )
+                await self._emit_audit_event(
+            run_id=state.run_id,
+                    workflow_name=state.workflow_name,
+                    step_name=step_name,
+                    event_type=EventType.AGENT_HANDOFF_PROPOSED,
+                    payload={"agent_name": agent.name, "next_agent": handoff_target},
+                )
+                if not workflow.agent_registry.has(handoff_target):
+                    await self._emit_audit_event(
+            run_id=state.run_id,
+                        workflow_name=state.workflow_name,
+                        step_name=step_name,
+                        event_type=EventType.AGENT_HANDOFF_REJECTED,
+                        payload={"next_agent": handoff_target, "reason": "unknown agent"},
+                    )
+                    raise AgentExecutionError(f"Unknown handoff target agent: {handoff_target}")
+            return output_payload, handoff_target, command
 
     async def _emit_transition_events(
         self,
@@ -806,17 +1033,15 @@ class LocalRuntime:
     ) -> None:
         """Emit transition audit events after next-step resolution."""
         if handoff_agent is not None:
-            await emit_event(
-                self.audit_emitter,
-                run_id=state.run_id,
+            await self._emit_audit_event(
+            run_id=state.run_id,
                 workflow_name=state.workflow_name,
                 step_name=step_name,
                 event_type=EventType.AGENT_HANDOFF_ACCEPTED,
                 payload={"next_agent": handoff_agent, "next_step": next_step},
             )
 
-        await emit_event(
-            self.audit_emitter,
+        await self._emit_audit_event(
             run_id=state.run_id,
             workflow_name=state.workflow_name,
             step_name=step_name,
@@ -972,6 +1197,120 @@ class LocalRuntime:
         self._runs[run_id] = loaded
         return loaded
 
+    async def _emit_audit_event(
+        self,
+        *,
+        run_id: str,
+        workflow_name: str,
+        event_type: EventType,
+        step_name: str | None = None,
+        payload: dict[str, Any] | None = None,
+        thread_id: str | None = None,
+    ) -> None:
+        """Emit one audit event with resolved thread identity when available."""
+        resolved_thread_id = thread_id
+        if resolved_thread_id is None:
+            cached_state = self._runs.get(run_id)
+            if cached_state is not None:
+                resolved_thread_id = cached_state.thread_id
+        if resolved_thread_id is None:
+            loaded = await self.run_store.get(run_id)
+            if loaded is not None:
+                self._runs[run_id] = loaded
+                resolved_thread_id = loaded.thread_id
+        await emit_event(
+            self.audit_emitter,
+            run_id=run_id,
+            thread_id=resolved_thread_id,
+            workflow_name=workflow_name,
+            step_name=step_name,
+            event_type=event_type,
+            payload=payload,
+        )
+
+    def _thread_aware_run_store(self) -> ThreadAwareRunStore:
+        """Return a thread-aware run store or raise."""
+        if not isinstance(self.run_store, ThreadAwareRunStore):
+            raise NotImplementedError("run_store does not support thread-aware lookup")
+        return self.run_store
+
+    async def _get_thread_target_run_id(self, thread_id: str) -> str:
+        """Resolve the active or latest persisted run id for one thread."""
+        store = self._thread_aware_run_store()
+        active_run_id = await store.get_active_run_id(thread_id)
+        if active_run_id is not None:
+            return active_run_id
+        latest_run_id = await store.get_latest_run_id(thread_id)
+        if latest_run_id is not None:
+            return latest_run_id
+        raise KeyError(f"Unknown thread_id: {thread_id}")
+
+    async def _register_active_run(self, state: RunState) -> None:
+        """Register the current run as active for its thread when supported."""
+        if isinstance(self.run_store, ThreadAwareRunStore):
+            await self.run_store.set_active_run_id(state.thread_id, state.run_id)
+
+    async def _clear_active_run(self, state: RunState) -> None:
+        """Clear the active mapping for terminal runs when supported."""
+        if isinstance(self.run_store, ThreadAwareRunStore):
+            await self.run_store.clear_active_run_id(state.thread_id, state.run_id)
+
+    async def _call_interrupt_manager(self, method: Any, *args: Any, **kwargs: Any) -> Any:
+        """Call the interrupt manager without blocking the event loop on durable stores."""
+        if self.interrupt_manager.uses_blocking_io():
+            return await asyncio.to_thread(method, *args, **kwargs)
+        return method(*args, **kwargs)
+
+    async def _interrupt_bump_epoch(self, run_id: str) -> int:
+        """Persist and return the next epoch for one run."""
+        return await self._call_interrupt_manager(self.interrupt_manager.bump_epoch, run_id)
+
+    async def _interrupt_create(self, **kwargs: Any) -> InterruptRequest:
+        """Create one interrupt request through the manager boundary."""
+        return await self._call_interrupt_manager(self.interrupt_manager.create, **kwargs)
+
+    async def _interrupt_resolve(self, **kwargs: Any) -> Any:
+        """Resolve one interrupt request through the manager boundary."""
+        return await self._call_interrupt_manager(self.interrupt_manager.resolve, **kwargs)
+
+    async def _interrupt_list_pending(self, run_id: str) -> list[InterruptRequest]:
+        """List pending interrupts for one run."""
+        return await self._call_interrupt_manager(self.interrupt_manager.list_pending, run_id)
+
+    async def _interrupt_get_pending(self, run_id: str, interrupt_id: str) -> InterruptRequest | None:
+        """Return one pending interrupt for one run."""
+        return await self._call_interrupt_manager(self.interrupt_manager.get_pending, run_id, interrupt_id)
+
+    async def _interrupt_get_latest_pending(self, run_id: str) -> InterruptRequest | None:
+        """Return the newest pending interrupt for one run."""
+        return await self._call_interrupt_manager(self.interrupt_manager.get_latest_pending, run_id)
+
+    def _coerce_payload_dict(self, payload: Any) -> dict[str, Any]:
+        """Normalize payloads for remote transport."""
+        normalized = self._to_payload(payload)
+        if isinstance(normalized, dict):
+            return normalized
+        return {"value": normalized}
+
+    def _should_execute_remotely(self, executable: Any) -> bool:
+        """Resolve whether an executable must run through the remote adapter."""
+        placement = getattr(executable, "execution_placement", "local_only")
+        if placement == "remote_only":
+            return True
+        if placement == "local_or_remote":
+            return self.containment_mode == "strict_remote"
+        if self.containment_mode == "strict_remote":
+            raise ContainmentPolicyError(
+                f"Executable {getattr(executable, 'name', '<unknown>')} is local_only in strict_remote mode"
+            )
+        return False
+
+    def _require_remote_adapter(self) -> RemoteExecutionAdapter:
+        """Return the configured remote adapter or raise a configuration error."""
+        if self.remote_execution_adapter is None:
+            raise ContainmentPolicyError("remote_execution_adapter is required for remote execution")
+        return self.remote_execution_adapter
+
     async def _persist_state(self, state: RunState) -> None:
         """Persist run state and emit checkpoint-written audit event."""
         # The run store owns checkpoint assignment; we preserve parent linkage here.
@@ -980,8 +1319,7 @@ class LocalRuntime:
         state.checkpoint_id = None
         self._runs[state.run_id] = state
         await self.run_store.put(state)
-        await emit_event(
-            self.audit_emitter,
+        await self._emit_audit_event(
             run_id=state.run_id,
             workflow_name=state.workflow_name,
             step_name=state.current_step,
@@ -992,3 +1330,5 @@ class LocalRuntime:
                 "thread_id": state.thread_id,
             },
         )
+        if state.status in {RunStatus.COMPLETED, RunStatus.FAILED}:
+            await self._clear_active_run(state)

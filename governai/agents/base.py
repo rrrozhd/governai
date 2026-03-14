@@ -10,6 +10,7 @@ from pydantic import BaseModel, ValidationError
 from governai.agents.context import AgentExecutionContext
 from governai.agents.exceptions import AgentExecutionError
 from governai.agents.result import AgentResult, AgentTask
+from governai.tools.base import ExecutionPlacement
 
 AgentReturn = Union[AgentResult, dict[str, Any]]
 AgentHandler = Callable[[AgentExecutionContext, AgentTask], Union[Awaitable[AgentReturn], AgentReturn]]
@@ -33,6 +34,8 @@ class Agent:
         requires_approval: bool = False,
         capabilities: list[str] | None = None,
         side_effect: bool = False,
+        execution_placement: ExecutionPlacement = "local_only",
+        remote_name: str | None = None,
     ) -> None:
         """Initialize Agent."""
         if max_turns < 1:
@@ -54,6 +57,8 @@ class Agent:
         self.capabilities = capabilities or []
         self.side_effect = side_effect
         self.executor_type = "agent"
+        self.execution_placement = execution_placement
+        self.remote_name = remote_name or name
 
     async def execute(self, ctx: AgentExecutionContext, data: Any) -> AgentResult:
         """Execute."""

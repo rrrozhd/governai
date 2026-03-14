@@ -378,6 +378,9 @@ def governed_flow_from_dsl(
     policy_registry: Mapping[str, Any] | None = None,
     skill_registry: Mapping[str, Any] | None = None,
     runtime_overrides: Mapping[str, Any] | None = None,
+    containment_mode: str = "local_dev",
+    remote_execution_adapter: Any = None,
+    interrupt_store: Any = None,
 ):
     """Compile DSL text into an executable governed flow instance."""
     ast = parse_dsl(text)
@@ -390,6 +393,9 @@ def governed_flow_from_dsl(
             policy_registry=policy_registry,
             skill_registry=skill_registry,
             runtime_overrides=runtime_overrides,
+            containment_mode=containment_mode,
+            remote_execution_adapter=remote_execution_adapter,
+            interrupt_store=interrupt_store,
         )
     except UnknownToolError as exc:
         for step in config.steps:

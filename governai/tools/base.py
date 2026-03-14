@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Literal, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
 
 InModelT = TypeVar("InModelT", bound=BaseModel)
 OutModelT = TypeVar("OutModelT", bound=BaseModel)
+ExecutionPlacement = Literal["local_only", "remote_only", "local_or_remote"]
 
 
 class ToolError(Exception):
@@ -56,6 +57,8 @@ class Tool(Generic[InModelT, OutModelT]):
         requires_approval: bool = False,
         tags: list[str] | None = None,
         executor_type: str = "python",
+        execution_placement: ExecutionPlacement = "local_only",
+        remote_name: str | None = None,
     ) -> None:
         """Initialize Tool."""
         self.name = name
@@ -68,6 +71,8 @@ class Tool(Generic[InModelT, OutModelT]):
         self.requires_approval = requires_approval
         self.tags = tags or []
         self.executor_type = executor_type
+        self.execution_placement = execution_placement
+        self.remote_name = remote_name or name
 
     async def execute(self, ctx: Any, data: Any) -> OutModelT:
         """Execute."""
@@ -108,6 +113,8 @@ class Tool(Generic[InModelT, OutModelT]):
         timeout_seconds: float | None = None,
         requires_approval: bool = False,
         tags: list[str] | None = None,
+        execution_placement: ExecutionPlacement = "local_only",
+        remote_name: str | None = None,
     ) -> "Tool[InModelT, OutModelT]":
         """From cli."""
         from governai.tools.cli_tool import CLITool
@@ -125,4 +132,6 @@ class Tool(Generic[InModelT, OutModelT]):
             timeout_seconds=timeout_seconds,
             requires_approval=requires_approval,
             tags=tags,
+            execution_placement=execution_placement,
+            remote_name=remote_name,
         )
