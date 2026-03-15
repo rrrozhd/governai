@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.2
+
+Release date: 2026-03-15
+
+Highlights:
+
+- Added token-based PyPI publishing fallback through GitHub environment secret `PYPI_API_TOKEN`.
+- Included the `LocalRuntime` remote tool return-shape fix shipped after `0.2.1`.
+
 ## 0.2.1
 
 Release date: 2026-03-14

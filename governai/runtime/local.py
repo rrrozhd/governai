@@ -808,7 +808,7 @@ class LocalRuntime:
             validated_output = tool.output_model.model_validate(response.output_payload or {})
         except ValidationError as exc:
             raise ToolValidationError(f"Output validation failed for {tool.name}: {exc}") from exc
-        return validated_output.model_dump(mode="json")
+        return validated_output
 
     async def _execute_agent(
         self,

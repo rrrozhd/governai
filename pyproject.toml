@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "governai"
-version = "0.2.1"
+version = "0.2.2"
 description = "Governed, deterministic AI backend workflow framework"
 readme = "README.md"
 license = "LicenseRef-Proprietary"
