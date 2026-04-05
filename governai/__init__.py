@@ -46,6 +46,7 @@ from governai.app import (
     validate_flow_config,
 )
 from governai.agents.base import Agent
+from governai.agents.spec import AgentSpec, ModelRegistry, ModelSchemaRef
 from governai.agents.exceptions import (
     AgentError,
     AgentExecutionError,
@@ -145,6 +146,7 @@ from governai.workflows.exceptions import (
 
 __all__ = [
     "Agent",
+    "AgentSpec",
     "AgentError",
     "AgentExecutionError",
     "AgentHandoffError",
@@ -154,6 +156,8 @@ __all__ = [
     "AgentResult",
     "AgentTask",
     "AgentToolNotAllowedError",
+    "ModelRegistry",
+    "ModelSchemaRef",
     "ApprovalDecision",
     "ApprovalDecisionType",
     "ApprovalEngine",
