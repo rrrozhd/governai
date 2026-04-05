@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v0.3.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-01 and 01-02 plans (policy isolation + interrupt async migration)
-last_updated: "2026-04-05T12:04:39Z"
-last_activity: 2026-04-05 — Completed plans 01-01, 01-02 in Phase 1
+stopped_at: All 3 plans complete (01-01, 01-02, 01-03)
+last_updated: "2026-04-05T12:05:00Z"
+last_activity: 2026-04-05 — Completed all Wave 1 plans (policy isolation, interrupt async, contract versioning)
 progress:
   total_phases: 4
   completed_phases: 0
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-04-05)
 ## Current Position
 
 Phase: 1 of 4 (Foundations)
-Plan: 2 of 3 in current phase
-Status: Executing phase 1
-Last activity: 2026-04-05 — Completed plans 01-01, 01-02
+Plan: 3 of 3 in current phase (all complete)
+Status: Executing — pending verification
+Last activity: 2026-04-05 — All Wave 1 plans complete
 
 Progress: [█░░░░░░░░░] 8%
 
@@ -66,6 +66,8 @@ Recent decisions affecting current work:
 - Plan 01-02: InterruptExpiredError carries full InterruptRequest for caller introspection
 - Plan 01-02: Removed blocking_io/_call_interrupt_manager entirely (clean break, not deprecation)
 - Plan 01-02: All InterruptStore ABCs are now async-first (no sync fallback)
+- Contract versioning: Remote names must be unique across all versions; versioned tools need distinct remote_names.
+- Schema fingerprint: blake2b with 16-byte digest (32-char hex), computed once at registration time.
 
 ### Pending Todos
 
@@ -79,6 +81,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-05T12:04:39Z
-Stopped at: Completed 01-01 and 01-02 plans
-Resume file: .planning/phases/01-foundations/01-02-SUMMARY.md
+Last session: 2026-04-05T12:05:00Z
+Stopped at: All Wave 1 plans complete — pending verification
+Resume file: .planning/phases/01-foundations/01-03-SUMMARY.md

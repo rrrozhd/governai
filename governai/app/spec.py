@@ -16,6 +16,7 @@ class TransitionSpec:
 @dataclass
 class GovernedStepSpec:
     name: str
+    version: str = "0.0.0"
     tool: Any = None
     agent: Any = None
     required_artifacts: list[str] = field(default_factory=list)

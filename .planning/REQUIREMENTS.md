@@ -21,9 +21,9 @@ Requirements for v0.3.0 Governance Depth. Each maps to roadmap phases.
 
 ### Serializable Asset Layer
 
-- [ ] **CONT-01**: Tools and GovernedStepSpecs carry a version field (SemVer string)
-- [ ] **CONT-02**: ToolRegistry keys on (name, version) for versioned tool lookup
-- [ ] **CONT-03**: Schema fingerprinting via hashlib.blake2b on Pydantic model_json_schema() detects schema drift
+- [x] **CONT-01**: Tools and GovernedStepSpecs carry a version field (SemVer string)
+- [x] **CONT-02**: ToolRegistry keys on (name, version) for versioned tool lookup
+- [x] **CONT-03**: Schema fingerprinting via hashlib.blake2b on Pydantic model_json_schema() detects schema drift
 - [ ] **SPEC-01**: AgentSpec is a serializable Pydantic model extracting all non-callable fields from Agent
 - [ ] **SPEC-02**: Agent.from_spec(spec) factory creates a runtime Agent from an AgentSpec
 - [ ] **SPEC-03**: AgentSpec is JSON-serializable via model_dump_json() with schemas as JSON Schema dicts
@@ -108,9 +108,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INT-01 | Phase 1 | Complete |
 | INT-02 | Phase 1 | Complete |
 | INT-03 | Phase 1 | Complete |
-| CONT-01 | Phase 1 | Pending |
-| CONT-02 | Phase 1 | Pending |
-| CONT-03 | Phase 1 | Pending |
+| CONT-01 | Phase 1 | Complete |
+| CONT-02 | Phase 1 | Complete |
+| CONT-03 | Phase 1 | Complete |
 | SPEC-01 | Phase 2 | Pending |
 | SPEC-02 | Phase 2 | Pending |
 | SPEC-03 | Phase 2 | Pending |
