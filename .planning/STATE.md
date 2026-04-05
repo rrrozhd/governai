@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.3.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 3 context gathered
-last_updated: "2026-04-05T14:53:08.707Z"
+stopped_at: Completed 03-runtime-depth plan 03 (ThreadStore)
+last_updated: "2026-04-05T15:30:27.940Z"
 last_activity: 2026-04-05
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 6
-  completed_plans: 6
+  total_plans: 10
+  completed_plans: 8
   percent: 8
 ---
 
@@ -21,12 +21,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-05)
 
 **Core value:** The runtime enforces governance guarantees at the framework layer.
-**Current focus:** Phase 02 — serializable-asset-layer
+**Current focus:** Phase 03 — runtime-depth
 
 ## Current Position
 
-Phase: 3
-Plan: Not started
+Phase: 03 (runtime-depth) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
 Last activity: 2026-04-05
 
@@ -53,6 +53,7 @@ Progress: [█░░░░░░░░░] 8%
 
 *Updated after each plan completion*
 | Phase 02 P02 | 3min | 1 tasks | 4 files |
+| Phase 03-runtime-depth P03 | 2min | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -70,6 +71,7 @@ Recent decisions affecting current work:
 - Contract versioning: Remote names must be unique across all versions; versioned tools need distinct remote_names.
 - Schema fingerprint: blake2b with 16-byte digest (32-char hex), computed once at registration time.
 - [Phase 02]: ToolManifest uses lazy import in to_manifest() to avoid circular dependency with base.py
+- [Phase 03-runtime-depth]: ThreadStore: archive() delegates to transition(ARCHIVED) preserving record; ALLOWED_THREAD_TRANSITIONS dict enforces O(1) state machine; model_copy(deep=True) on all returned records
 
 ### Pending Todos
 
@@ -83,6 +85,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-05T14:53:08.704Z
-Stopped at: Phase 3 context gathered
-Resume file: .planning/phases/03-runtime-depth/03-CONTEXT.md
+Last session: 2026-04-05T15:30:27.938Z
+Stopped at: Completed 03-runtime-depth plan 03 (ThreadStore)
+Resume file: None

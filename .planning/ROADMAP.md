@@ -62,13 +62,13 @@ Plans:
   2. A ThreadRecord transitions through its full lifecycle (created → active → interrupted → idle → archived) via ThreadStore status transitions — archival is a status change, not a deletion, so the audit trail is preserved
   3. A tool that accesses a secret via SecretsProvider at call time never causes that secret value to appear in any persisted audit event — the emitter's redaction pass replaces known secret values with [REDACTED] before persistence
   4. An AuditEvent with a typed extensions payload serializes and deserializes correctly — a v0.2.2-era AuditEvent without extensions deserializes to extensions=[] without error
-**Plans:** 4 plans
+**Plans:** 2/4 plans executed
 **UI hint**: no
 
 Plans:
-- [ ] 03-01-PLAN.md — Audit extensions and new EventType values (AuditExtension model, backward-compatible extensions field, emit_event update)
+- [x] 03-01-PLAN.md — Audit extensions and new EventType values (AuditExtension model, backward-compatible extensions field, emit_event update)
 - [ ] 03-02-PLAN.md — Capability enforcement (CapabilityGrant model, make_capability_policy factory, three-tier scoping)
-- [ ] 03-03-PLAN.md — Thread lifecycle (ThreadStatus, ThreadRecord, ThreadStore ABC, InMemoryThreadStore, state machine)
+- [x] 03-03-PLAN.md — Thread lifecycle (ThreadStatus, ThreadRecord, ThreadStore ABC, InMemoryThreadStore, state machine)
 - [ ] 03-04-PLAN.md — Secrets redaction and runtime wiring (SecretsProvider, SecretRegistry, RedactingAuditEmitter, LocalRuntime integration)
 
 ### Phase 4: Memory Layer
@@ -90,5 +90,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Foundations | 3/3 | Executing | - |
 | 2. Serializable Asset Layer | 0/3 | Not started | - |
-| 3. Runtime Depth | 0/4 | Not started | - |
+| 3. Runtime Depth | 2/4 | In Progress|  |
 | 4. Memory Layer | 0/TBD | Not started | - |

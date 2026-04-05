@@ -45,9 +45,9 @@ Requirements for v0.3.0 Governance Depth. Each maps to roadmap phases.
 
 ### Thread & Memory
 
-- [ ] **THR-01**: ThreadRecord model tracks lifecycle states (created, active, idle, interrupted, archived)
-- [ ] **THR-02**: ThreadStore provides CRUD operations for thread records with status transitions
-- [ ] **THR-03**: Thread archival is a status transition, not deletion — preserves audit trail
+- [x] **THR-01**: ThreadRecord model tracks lifecycle states (created, active, idle, interrupted, archived)
+- [x] **THR-02**: ThreadStore provides CRUD operations for thread records with status transitions
+- [x] **THR-03**: Thread archival is a status transition, not deletion — preserves audit trail
 - [ ] **MEM-01**: MemoryConnector protocol defines read/write/search with scope binding (thread, workflow, global)
 - [ ] **MEM-02**: Memory writes emit audit events (MEMORY_WRITE, MEMORY_READ event types)
 - [ ] **MEM-03**: In-memory MemoryConnector implementation ships as default; backends are pluggable
@@ -126,9 +126,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AUD-01 | Phase 3 | Pending |
 | AUD-02 | Phase 3 | Pending |
 | AUD-03 | Phase 3 | Pending |
-| THR-01 | Phase 3 | Pending |
-| THR-02 | Phase 3 | Pending |
-| THR-03 | Phase 3 | Pending |
+| THR-01 | Phase 3 | Complete |
+| THR-02 | Phase 3 | Complete |
+| THR-03 | Phase 3 | Complete |
 | MEM-01 | Phase 4 | Pending |
 | MEM-02 | Phase 4 | Pending |
 | MEM-03 | Phase 4 | Pending |
