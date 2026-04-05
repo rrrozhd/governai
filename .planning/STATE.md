@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.3.0
 milestone_name: milestone
-status: planning
-stopped_at: Phase 1 context gathered
-last_updated: "2026-04-05T11:16:12.224Z"
-last_activity: 2026-04-05 — Roadmap created for v0.3.0 Governance Depth (33 requirements, 4 phases)
+status: executing
+stopped_at: Completed 01-03-PLAN.md
+last_updated: "2026-04-05T12:00:57Z"
+last_activity: 2026-04-05 — Contract versioning implemented (Tool.version, ToolRegistry tuple keying, blake2b fingerprinting)
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_plans: 3
+  completed_plans: 1
+  percent: 8
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-04-05)
 ## Current Position
 
 Phase: 1 of 4 (Foundations)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-04-05 — Roadmap created for v0.3.0 Governance Depth (33 requirements, 4 phases)
+Plan: 3 of 3 in current phase (01-03 complete)
+Status: Executing
+Last activity: 2026-04-05 — Contract versioning implemented (Tool.version, ToolRegistry tuple keying, blake2b fingerprinting)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 8%
 
 ## Performance Metrics
 
@@ -62,6 +62,8 @@ Recent decisions affecting current work:
 
 - Roadmap: 4-phase order driven by dependency graph — foundations before assets, assets before runtime depth, audit enrichment before memory connector.
 - Architecture: All new injectable dependencies follow "Protocol + No-Op Default" pattern; persistence backends use ABC, consumer-facing providers use typing.Protocol.
+- Contract versioning: Remote names must be unique across all versions; versioned tools need distinct remote_names.
+- Schema fingerprint: blake2b with 16-byte digest (32-char hex), computed once at registration time.
 
 ### Pending Todos
 
@@ -75,6 +77,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-05T11:16:12.217Z
-Stopped at: Phase 1 context gathered
-Resume file: .planning/phases/01-foundations/01-CONTEXT.md
+Last session: 2026-04-05T12:00:57Z
+Stopped at: Completed 01-03-PLAN.md
+Resume file: .planning/phases/01-foundations/01-03-SUMMARY.md
