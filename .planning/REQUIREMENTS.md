@@ -33,9 +33,9 @@ Requirements for v0.3.0 Governance Depth. Each maps to roadmap phases.
 
 ### Governance Depth
 
-- [ ] **CAP-01**: Tools and agents declare required capabilities; policy engine checks grants before execution
-- [ ] **CAP-02**: CapabilityGrant model supports global, workflow-scoped, and step-scoped grants
-- [ ] **CAP-03**: Missing capability produces a deny decision with diagnostic listing required vs granted
+- [x] **CAP-01**: Tools and agents declare required capabilities; policy engine checks grants before execution
+- [x] **CAP-02**: CapabilityGrant model supports global, workflow-scoped, and step-scoped grants
+- [x] **CAP-03**: Missing capability produces a deny decision with diagnostic listing required vs granted
 - [ ] **SEC-01**: SecretsProvider protocol defines resolve(key) -> str for late-bound secret resolution
 - [ ] **SEC-02**: ExecutionContext receives an optional SecretsProvider; tools access secrets at call time
 - [ ] **SEC-03**: AuditEmitter applies redaction pass — known secret values are replaced with [REDACTED] before persistence
@@ -117,9 +117,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MFST-01 | Phase 2 | Complete |
 | MFST-02 | Phase 2 | Complete |
 | MFST-03 | Phase 2 | Complete |
-| CAP-01 | Phase 3 | Pending |
-| CAP-02 | Phase 3 | Pending |
-| CAP-03 | Phase 3 | Pending |
+| CAP-01 | Phase 3 | Complete |
+| CAP-02 | Phase 3 | Complete |
+| CAP-03 | Phase 3 | Complete |
 | SEC-01 | Phase 3 | Pending |
 | SEC-02 | Phase 3 | Pending |
 | SEC-03 | Phase 3 | Pending |

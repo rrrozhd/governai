@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v0.3.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-runtime-depth-01-PLAN.md
-last_updated: "2026-04-05T15:31:22.843Z"
+stopped_at: Completed 03-02-PLAN.md
+last_updated: "2026-04-05T15:31:33.831Z"
 last_activity: 2026-04-05
 progress:
   total_phases: 4
@@ -76,6 +76,8 @@ Recent decisions affecting current work:
 - [Phase 03-runtime-depth]: ThreadStore: archive() delegates to transition(ARCHIVED) preserving record; ALLOWED_THREAD_TRANSITIONS dict enforces O(1) state machine; model_copy(deep=True) on all returned records
 - [Phase 03-runtime-depth]: No central extension registry: consumers subclass AuditExtension directly with fixed type_key (D-14)
 - [Phase 03-runtime-depth]: AuditEvent.extensions defaults to [] via Field(default_factory=list) for v0.2.2 backward compat
+- [Phase 03-runtime-depth]: CapabilityGrant defaults to scope='global' with target=None for ergonomic single-arg usage
+- [Phase 03-runtime-depth]: make_capability_policy() is a closure capturing grants list -- deny reason sorted for determinism
 
 ### Pending Todos
 
@@ -89,6 +91,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-05T15:31:13.134Z
-Stopped at: Completed 03-runtime-depth-01-PLAN.md
+Last session: 2026-04-05T15:31:33.827Z
+Stopped at: Completed 03-02-PLAN.md
 Resume file: None
