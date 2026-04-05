@@ -128,6 +128,7 @@ from governai.tools.base import (
     ToolExecutionError,
     ToolValidationError,
 )
+from governai.tools.manifest import ToolManifest
 from governai.tools.python_tool import tool
 from governai.tools.registry import ToolRegistry
 from governai.workflows.base import Workflow
@@ -254,6 +255,7 @@ __all__ = [
     "Tool",
     "ToolError",
     "ToolExecutionError",
+    "ToolManifest",
     "ToolRegistry",
     "ToolResolver",
     "ToolValidationError",

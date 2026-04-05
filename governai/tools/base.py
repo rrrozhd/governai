@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import Any, Generic, Literal, TypeVar
 
 from pydantic import BaseModel, ValidationError
@@ -99,6 +101,42 @@ class Tool(Generic[InModelT, OutModelT]):
     async def _execute_validated(self, ctx: Any, data: InModelT) -> Any:  # pragma: no cover - abstract
         """Internal helper to execute validated."""
         raise NotImplementedError
+
+    def to_manifest(self) -> "ToolManifest":
+        """Extract a read-only ToolManifest descriptor from this Tool.
+
+        Computes schema fingerprint inline if the tool has not been registered
+        (i.e. schema_fingerprint is None).
+        """
+        from governai.tools.manifest import ToolManifest
+
+        input_schema = self.input_model.model_json_schema()
+        output_schema = self.output_model.model_json_schema()
+
+        if self.schema_fingerprint is None:
+            combined = json.dumps(
+                {"input": input_schema, "output": output_schema}, sort_keys=True
+            ).encode()
+            fingerprint = hashlib.blake2b(combined, digest_size=16).hexdigest()
+        else:
+            fingerprint = self.schema_fingerprint
+
+        return ToolManifest(
+            name=self.name,
+            version=self.version,
+            description=self.description,
+            input_schema=input_schema,
+            output_schema=output_schema,
+            schema_fingerprint=fingerprint,
+            capabilities=list(self.capabilities),
+            side_effect=self.side_effect,
+            timeout_seconds=self.timeout_seconds,
+            requires_approval=self.requires_approval,
+            tags=list(self.tags),
+            executor_type=self.executor_type,
+            execution_placement=self.execution_placement,
+            remote_name=self.remote_name,
+        )
 
     @classmethod
     def from_cli(
