@@ -213,7 +213,8 @@ def test_local_runtime_grants_wiring():
     from governai.runtime.local import LocalRuntime
 
     runtime = LocalRuntime(grants=[CapabilityGrant(capability="x")])
-    assert "capability_policy" in runtime.policy_engine._policies
+    policy_names = [name for name, _ in runtime.policy_engine._global]
+    assert "capability_policy" in policy_names
 
 
 def test_local_runtime_secrets_wraps_emitter():
