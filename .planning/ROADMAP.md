@@ -29,7 +29,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. The interrupt store exposes a sweep API that a caller can invoke to remove all expired interrupt records
   4. RedisInterruptStore uses the async redis.asyncio client (consistent with RedisRunStore — no sync redis.Redis usage in the hot path)
   5. Tools and GovernedStepSpecs carry a version field (SemVer string) and ToolRegistry keys on (name, version) — Zeroth's existing version strings round-trip through the model without re-serialization
-**Plans**: TBD
+**Plans:** 3 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Policy fault isolation (crash safety, per-policy timeout, diagnostic deny decisions)
+- [ ] 01-02-PLAN.md — Interrupt async migration (InterruptExpiredError, sweep_expired, redis.asyncio)
+- [ ] 01-03-PLAN.md — Contract versioning primitives (version field, (name,version) registry keying, schema fingerprint)
 
 ### Phase 2: Serializable Asset Layer
 **Goal**: Agent and tool definitions are serializable Pydantic models that Zeroth Studio can store, transmit, and reconstruct — and all state writes are atomic so a crash between write and cache can never leave a run in an inconsistent state
@@ -72,7 +77,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundations | 0/TBD | Not started | - |
+| 1. Foundations | 0/3 | Planning complete | - |
 | 2. Serializable Asset Layer | 0/TBD | Not started | - |
 | 3. Runtime Depth | 0/TBD | Not started | - |
 | 4. Memory Layer | 0/TBD | Not started | - |
