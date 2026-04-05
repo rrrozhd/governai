@@ -4,7 +4,7 @@ import uuid
 from abc import ABC, abstractmethod
 from typing import Any
 
-from governai.models.audit import AuditEvent
+from governai.models.audit import AuditEvent, AuditExtension
 from governai.models.common import EventType
 
 
@@ -24,6 +24,7 @@ async def emit_event(
     event_type: EventType,
     step_name: str | None = None,
     payload: dict[str, Any] | None = None,
+    extensions: list[AuditExtension] | None = None,
 ) -> AuditEvent:
     """Emit event."""
     event = AuditEvent(
@@ -34,6 +35,7 @@ async def emit_event(
         step_name=step_name,
         event_type=event_type,
         payload=payload or {},
+        extensions=extensions or [],
     )
     await emitter.emit(event)
     return event
