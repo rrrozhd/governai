@@ -42,11 +42,11 @@ The runtime — not prompts, not application code — enforces what runs next, w
 
 ### Active
 
-- [ ] Transactional state persistence
+- [x] Transactional state persistence — Validated in Phase 2: Serializable Asset Layer
 - [x] Policy fault isolation and capability model — Validated in Phase 1: Foundations
 - [x] Contract versioning — Validated in Phase 1: Foundations
-- [ ] Agent asset definitions (AgentSpec)
-- [ ] Execution manifest model (ToolManifest)
+- [x] Agent asset definitions (AgentSpec) — Validated in Phase 2: Serializable Asset Layer
+- [x] Execution manifest model (ToolManifest) — Validated in Phase 2: Serializable Asset Layer
 - [ ] Rich thread lifecycle
 - [ ] Secrets-aware execution context
 - [ ] Audit event enrichment protocol
@@ -103,4 +103,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-05 after milestone v0.3.0 started*
+*Last updated: 2026-04-05 after Phase 2 (Serializable Asset Layer) complete*
