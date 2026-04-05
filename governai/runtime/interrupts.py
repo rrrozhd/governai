@@ -31,31 +31,33 @@ class InterruptResolution:
 class InterruptStore(ABC):
     """Persistence backend for interrupt requests and per-run epochs."""
 
-    blocking_io: bool = False
-
     @abstractmethod
-    def get_epoch(self, run_id: str) -> int:
+    async def get_epoch(self, run_id: str) -> int:
         """Return the persisted epoch for a run."""
 
     @abstractmethod
-    def set_epoch(self, run_id: str, epoch: int) -> None:
+    async def set_epoch(self, run_id: str, epoch: int) -> None:
         """Persist the epoch for a run."""
 
     @abstractmethod
-    def save_request(self, request: InterruptRequest) -> None:
+    async def save_request(self, request: InterruptRequest) -> None:
         """Persist one interrupt request."""
 
     @abstractmethod
-    def get_request(self, run_id: str, interrupt_id: str) -> InterruptRequest | None:
+    async def get_request(self, run_id: str, interrupt_id: str) -> InterruptRequest | None:
         """Fetch one interrupt request by id."""
 
     @abstractmethod
-    def list_requests(self, run_id: str) -> list[InterruptRequest]:
+    async def list_requests(self, run_id: str) -> list[InterruptRequest]:
         """List all stored interrupt requests for a run."""
 
     @abstractmethod
-    def delete_request(self, run_id: str, interrupt_id: str) -> None:
+    async def delete_request(self, run_id: str, interrupt_id: str) -> None:
         """Delete one stored interrupt request."""
+
+    @abstractmethod
+    async def sweep_expired(self) -> int:
+        """Remove all expired interrupt requests across all runs. Returns count removed."""
 
 
 class InMemoryInterruptStore(InterruptStore):
@@ -66,27 +68,27 @@ class InMemoryInterruptStore(InterruptStore):
         self._requests: dict[str, dict[str, InterruptRequest]] = {}
         self._epochs: dict[str, int] = {}
 
-    def get_epoch(self, run_id: str) -> int:
+    async def get_epoch(self, run_id: str) -> int:
         """Return the current epoch for a run."""
         return self._epochs.get(run_id, 0)
 
-    def set_epoch(self, run_id: str, epoch: int) -> None:
+    async def set_epoch(self, run_id: str, epoch: int) -> None:
         """Persist the current epoch for a run."""
         self._epochs[run_id] = epoch
 
-    def save_request(self, request: InterruptRequest) -> None:
+    async def save_request(self, request: InterruptRequest) -> None:
         """Persist one request object."""
         self._requests.setdefault(request.run_id, {})[request.interrupt_id] = request
 
-    def get_request(self, run_id: str, interrupt_id: str) -> InterruptRequest | None:
+    async def get_request(self, run_id: str, interrupt_id: str) -> InterruptRequest | None:
         """Fetch one request object by run and interrupt id."""
         return self._requests.get(run_id, {}).get(interrupt_id)
 
-    def list_requests(self, run_id: str) -> list[InterruptRequest]:
+    async def list_requests(self, run_id: str) -> list[InterruptRequest]:
         """List all request objects for a run."""
         return list(self._requests.get(run_id, {}).values())
 
-    def delete_request(self, run_id: str, interrupt_id: str) -> None:
+    async def delete_request(self, run_id: str, interrupt_id: str) -> None:
         """Delete one request object."""
         requests = self._requests.get(run_id)
         if requests is None:
@@ -95,11 +97,23 @@ class InMemoryInterruptStore(InterruptStore):
         if not requests:
             self._requests.pop(run_id, None)
 
+    async def sweep_expired(self) -> int:
+        """Remove all expired interrupt requests across all runs. Returns count removed."""
+        now_ts = int(time.time())
+        removed = 0
+        for run_id in list(self._requests.keys()):
+            for interrupt_id, req in list(self._requests.get(run_id, {}).items()):
+                if req.expires_at > 0 and req.expires_at <= now_ts:
+                    del self._requests[run_id][interrupt_id]
+                    removed += 1
+            # Clean up empty run entries
+            if run_id in self._requests and not self._requests[run_id]:
+                del self._requests[run_id]
+        return removed
+
 
 class RedisInterruptStore(InterruptStore):
     """Redis-backed durable interrupt persistence."""
-
-    blocking_io = True
 
     def __init__(
         self,
@@ -113,15 +127,15 @@ class RedisInterruptStore(InterruptStore):
         self.prefix = prefix
         self._redis = redis_client
 
-    def _client(self) -> Any:
+    async def _client(self) -> Any:
         """Return cached redis client, creating it lazily when needed."""
         if self._redis is not None:
             return self._redis
         try:
-            import redis  # type: ignore
+            import redis.asyncio as redis  # type: ignore
         except Exception as exc:  # pragma: no cover - dependency optional
             raise RuntimeError("RedisInterruptStore requires 'redis' package") from exc
-        self._redis = redis.Redis.from_url(self.redis_url, encoding="utf-8", decode_responses=True)
+        self._redis = redis.from_url(self.redis_url, encoding="utf-8", decode_responses=True)
         return self._redis
 
     @staticmethod
@@ -147,75 +161,98 @@ class RedisInterruptStore(InterruptStore):
         """Build redis list key for interrupt ids in insertion order."""
         return f"{self.prefix}:run:{run_id}:requests"
 
-    def _rewrite_list(self, key: str, values: list[str]) -> None:
+    async def _rewrite_list(self, key: str, values: list[str]) -> None:
         """Rewrite one redis list key from scratch."""
-        client = self._client()
-        client.delete(key)
+        client = await self._client()
+        await client.delete(key)
         for value in values:
-            client.rpush(key, value)
+            await client.rpush(key, value)
 
-    def get_epoch(self, run_id: str) -> int:
+    async def get_epoch(self, run_id: str) -> int:
         """Return the persisted epoch for a run."""
-        client = self._client()
-        payload = self._decode_text(client.get(self._epoch_key(run_id)))
+        client = await self._client()
+        payload = self._decode_text(await client.get(self._epoch_key(run_id)))
         if payload is None:
             return 0
         return int(payload)
 
-    def set_epoch(self, run_id: str, epoch: int) -> None:
+    async def set_epoch(self, run_id: str, epoch: int) -> None:
         """Persist the current epoch for a run."""
-        self._client().set(self._epoch_key(run_id), str(int(epoch)))
+        client = await self._client()
+        await client.set(self._epoch_key(run_id), str(int(epoch)))
 
-    def save_request(self, request: InterruptRequest) -> None:
+    async def save_request(self, request: InterruptRequest) -> None:
         """Persist one interrupt request."""
-        client = self._client()
-        client.set(self._request_key(request.run_id, request.interrupt_id), json.dumps(asdict(request)))
+        client = await self._client()
+        await client.set(self._request_key(request.run_id, request.interrupt_id), json.dumps(asdict(request)))
         index_key = self._request_index_key(request.run_id)
-        existing = [value for value in client.lrange(index_key, 0, -1)]
+        existing = [value for value in await client.lrange(index_key, 0, -1)]
         normalized = [current for current in (self._decode_text(value) for value in existing) if current is not None]
         if request.interrupt_id not in normalized:
-            client.rpush(index_key, request.interrupt_id)
+            await client.rpush(index_key, request.interrupt_id)
 
-    def get_request(self, run_id: str, interrupt_id: str) -> InterruptRequest | None:
+    async def get_request(self, run_id: str, interrupt_id: str) -> InterruptRequest | None:
         """Fetch one interrupt request by id."""
-        payload = self._decode_text(self._client().get(self._request_key(run_id, interrupt_id)))
+        client = await self._client()
+        payload = self._decode_text(await client.get(self._request_key(run_id, interrupt_id)))
         if payload is None:
             return None
         return InterruptRequest(**json.loads(payload))
 
-    def list_requests(self, run_id: str) -> list[InterruptRequest]:
+    async def list_requests(self, run_id: str) -> list[InterruptRequest]:
         """List all stored interrupt requests for a run."""
-        client = self._client()
-        raw_ids = client.lrange(self._request_index_key(run_id), 0, -1)
+        client = await self._client()
+        raw_ids = await client.lrange(self._request_index_key(run_id), 0, -1)
         normalized = [current for current in (self._decode_text(value) for value in raw_ids) if current is not None]
         valid_ids: list[str] = []
         out: list[InterruptRequest] = []
         for interrupt_id in normalized:
-            request = self.get_request(run_id, interrupt_id)
+            request = await self.get_request(run_id, interrupt_id)
             if request is None:
                 continue
             valid_ids.append(interrupt_id)
             out.append(request)
         if valid_ids != normalized:
-            self._rewrite_list(self._request_index_key(run_id), valid_ids)
+            await self._rewrite_list(self._request_index_key(run_id), valid_ids)
         return out
 
-    def delete_request(self, run_id: str, interrupt_id: str) -> None:
+    async def delete_request(self, run_id: str, interrupt_id: str) -> None:
         """Delete one stored interrupt request."""
-        client = self._client()
-        client.delete(self._request_key(run_id, interrupt_id))
-        raw_ids = client.lrange(self._request_index_key(run_id), 0, -1)
+        client = await self._client()
+        await client.delete(self._request_key(run_id, interrupt_id))
+        raw_ids = await client.lrange(self._request_index_key(run_id), 0, -1)
         normalized = [current for current in (self._decode_text(value) for value in raw_ids) if current is not None]
         filtered = [current for current in normalized if current != interrupt_id]
-        self._rewrite_list(self._request_index_key(run_id), filtered)
+        await self._rewrite_list(self._request_index_key(run_id), filtered)
 
-    def close(self) -> None:
-        """Close underlying redis client if it exposes a sync close hook."""
+    async def sweep_expired(self) -> int:
+        """Remove all expired interrupt requests across all runs. Returns count removed."""
+        client = await self._client()
+        now_ts = int(time.time())
+        removed = 0
+        cursor = 0
+        pattern = f"{self.prefix}:run:*:request:*"
+        while True:
+            cursor, keys = await client.scan(cursor, match=pattern, count=100)
+            for key in keys:
+                payload = await client.get(key)
+                if payload is None:
+                    continue
+                data = json.loads(payload)
+                if data.get("expires_at", 0) > 0 and data["expires_at"] <= now_ts:
+                    await client.delete(key)
+                    removed += 1
+            if cursor == 0:
+                break
+        return removed
+
+    async def close(self) -> None:
+        """Close underlying redis client."""
         if self._redis is None:
             return
-        close = getattr(self._redis, "close", None)
-        if callable(close):
-            close()
+        aclose = getattr(self._redis, "aclose", None)
+        if callable(aclose):
+            await aclose()
 
 
 class InterruptManager:
@@ -226,21 +263,17 @@ class InterruptManager:
         self.default_ttl_seconds = default_ttl_seconds
         self.store = store or InMemoryInterruptStore()
 
-    def uses_blocking_io(self) -> bool:
-        """Return whether the backing store performs blocking I/O."""
-        return bool(getattr(self.store, "blocking_io", False))
-
-    def current_epoch(self, run_id: str) -> int:
+    async def current_epoch(self, run_id: str) -> int:
         """Current epoch."""
-        return self.store.get_epoch(run_id)
+        return await self.store.get_epoch(run_id)
 
-    def bump_epoch(self, run_id: str) -> int:
+    async def bump_epoch(self, run_id: str) -> int:
         """Bump epoch."""
-        next_epoch = self.current_epoch(run_id) + 1
-        self.store.set_epoch(run_id, next_epoch)
+        next_epoch = await self.current_epoch(run_id) + 1
+        await self.store.set_epoch(run_id, next_epoch)
         return next_epoch
 
-    def create(
+    async def create(
         self,
         *,
         run_id: str,
@@ -253,14 +286,14 @@ class InterruptManager:
     ) -> InterruptRequest:
         """Create."""
         if max_pending is not None and max_pending >= 0:
-            current_pending = self.list_pending(run_id, epoch=epoch)
+            current_pending = await self.list_pending(run_id, epoch=epoch)
             if len(current_pending) >= max_pending:
                 raise ValueError(
                     f"Run {run_id} reached max pending interrupts ({max_pending})"
                 )
         now_ts = int(time.time())
         ttl = ttl_seconds if ttl_seconds is not None else self.default_ttl_seconds
-        resolved_epoch = self.current_epoch(run_id) if epoch is None else epoch
+        resolved_epoch = await self.current_epoch(run_id) if epoch is None else epoch
         request = InterruptRequest(
             interrupt_id=str(uuid.uuid4()),
             run_id=run_id,
@@ -271,38 +304,38 @@ class InterruptManager:
             created_at=now_ts,
             expires_at=now_ts + int(ttl),
         )
-        self.store.save_request(request)
+        await self.store.save_request(request)
         return request
 
-    def get_pending(self, run_id: str, interrupt_id: str) -> InterruptRequest | None:
+    async def get_pending(self, run_id: str, interrupt_id: str) -> InterruptRequest | None:
         """Return one pending interrupt request when it still exists and is live."""
-        req = self.store.get_request(run_id, interrupt_id)
+        req = await self.store.get_request(run_id, interrupt_id)
         if req is None or req.status != "pending":
             return None
         if req.expires_at <= int(time.time()):
             req.status = "expired"
-            self.store.save_request(req)
+            await self.store.save_request(req)
             return None
         return req
 
-    def get_latest_pending(self, run_id: str, *, epoch: int | None = None) -> InterruptRequest | None:
+    async def get_latest_pending(self, run_id: str, *, epoch: int | None = None) -> InterruptRequest | None:
         """Return the newest pending interrupt for a run."""
-        pending = self.list_pending(run_id, epoch=epoch)
+        pending = await self.list_pending(run_id, epoch=epoch)
         if not pending:
             return None
         return pending[-1]
 
-    def list_pending(self, run_id: str, *, epoch: int | None = None) -> list[InterruptRequest]:
+    async def list_pending(self, run_id: str, *, epoch: int | None = None) -> list[InterruptRequest]:
         """List pending."""
         now_ts = int(time.time())
-        requests = self.store.list_requests(run_id)
+        requests = await self.store.list_requests(run_id)
         out: list[InterruptRequest] = []
         for req in requests:
             if req.status != "pending":
                 continue
             if req.expires_at <= now_ts:
                 req.status = "expired"
-                self.store.save_request(req)
+                await self.store.save_request(req)
                 continue
             if epoch is not None and req.epoch != epoch:
                 continue
@@ -310,7 +343,7 @@ class InterruptManager:
         out.sort(key=lambda item: (item.created_at, item.interrupt_id))
         return out
 
-    def resolve(
+    async def resolve(
         self,
         *,
         run_id: str,
@@ -319,29 +352,31 @@ class InterruptManager:
         epoch: int | None = None,
     ) -> InterruptResolution:
         """Resolve."""
-        req = self.store.get_request(run_id, interrupt_id)
+        from governai.workflows.exceptions import InterruptExpiredError
+
+        req = await self.store.get_request(run_id, interrupt_id)
         if req is None:
             raise KeyError(f"Unknown interrupt_id: {interrupt_id}")
         if req.status != "pending":
             raise ValueError(f"Interrupt {interrupt_id} is not pending")
         if req.expires_at <= int(time.time()):
             req.status = "expired"
-            self.store.save_request(req)
-            raise ValueError(f"Interrupt {interrupt_id} has expired")
+            await self.store.save_request(req)
+            raise InterruptExpiredError(f"Interrupt {interrupt_id} has expired", request=req)
         if epoch is not None and req.epoch != epoch:
             raise ValueError(
                 f"Interrupt epoch mismatch for {interrupt_id}: expected={req.epoch} provided={epoch}"
             )
         req.status = "resolved"
-        self.store.save_request(req)
+        await self.store.save_request(req)
         return InterruptResolution(request=req, response=response)
 
-    def clear_expired(self, run_id: str) -> int:
+    async def clear_expired(self, run_id: str) -> int:
         """Clear expired and resolved requests for one run."""
         now_ts = int(time.time())
         removed = 0
-        for req in self.store.list_requests(run_id):
+        for req in await self.store.list_requests(run_id):
             if req.status != "pending" or req.expires_at <= now_ts:
-                self.store.delete_request(run_id, req.interrupt_id)
+                await self.store.delete_request(run_id, req.interrupt_id)
                 removed += 1
         return removed

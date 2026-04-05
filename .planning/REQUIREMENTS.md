@@ -15,9 +15,9 @@ Requirements for v0.3.0 Governance Depth. Each maps to roadmap phases.
 - [x] **POL-01**: Policy engine isolates each policy evaluation — a crashing or hung policy does not terminate the run
 - [x] **POL-02**: Each policy can declare a timeout; engine enforces it via asyncio.wait_for
 - [x] **POL-03**: Policy exceptions are caught, audited, and converted to deny decisions with diagnostic reason
-- [ ] **INT-01**: Interrupt resolution rejects expired interrupts with a typed InterruptExpiredError
-- [ ] **INT-02**: InterruptStore provides a sweep API to clean up stale interrupts
-- [ ] **INT-03**: RedisInterruptStore uses async Redis client (migrated from sync redis.Redis)
+- [x] **INT-01**: Interrupt resolution rejects expired interrupts with a typed InterruptExpiredError
+- [x] **INT-02**: InterruptStore provides a sweep API to clean up stale interrupts
+- [x] **INT-03**: RedisInterruptStore uses async Redis client (migrated from sync redis.Redis)
 
 ### Serializable Asset Layer
 
@@ -105,9 +105,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | POL-01 | Phase 1 | Complete |
 | POL-02 | Phase 1 | Complete |
 | POL-03 | Phase 1 | Complete |
-| INT-01 | Phase 1 | Pending |
-| INT-02 | Phase 1 | Pending |
-| INT-03 | Phase 1 | Pending |
+| INT-01 | Phase 1 | Complete |
+| INT-02 | Phase 1 | Complete |
+| INT-03 | Phase 1 | Complete |
 | CONT-01 | Phase 1 | Pending |
 | CONT-02 | Phase 1 | Pending |
 | CONT-03 | Phase 1 | Pending |

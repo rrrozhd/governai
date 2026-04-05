@@ -38,6 +38,7 @@ from governai.workflows.exceptions import (
     ApprovalRequiredError,
     ContainmentPolicyError,
     IllegalTransitionError,
+    InterruptExpiredError,
     PolicyDeniedError,
 )
 from governai.workflows.runner import resolve_next_step
@@ -318,14 +319,26 @@ class LocalRuntime:
                 response=payload.response,
                 epoch=payload.epoch if payload.epoch is not None else state.epoch,
             )
-        except ValueError as exc:
-            message = str(exc)
-            event = EventType.INTERRUPT_EXPIRED if "expired" in message else EventType.INTERRUPT_REJECTED_EPOCH
+        except InterruptExpiredError as exc:
             await self._emit_audit_event(
-            run_id=state.run_id,
+                run_id=state.run_id,
                 workflow_name=state.workflow_name,
                 step_name=state.current_step,
-                event_type=event,
+                event_type=EventType.INTERRUPT_EXPIRED,
+                payload={
+                    "interrupt_id": payload.interrupt_id,
+                    "error": str(exc),
+                    "expires_at": exc.request.expires_at,
+                },
+            )
+            raise
+        except (ValueError, KeyError) as exc:
+            message = str(exc)
+            await self._emit_audit_event(
+                run_id=state.run_id,
+                workflow_name=state.workflow_name,
+                step_name=state.current_step,
+                event_type=EventType.INTERRUPT_REJECTED_EPOCH,
                 payload={"interrupt_id": payload.interrupt_id, "error": message},
             )
             raise
@@ -1256,35 +1269,29 @@ class LocalRuntime:
         if isinstance(self.run_store, ThreadAwareRunStore):
             await self.run_store.clear_active_run_id(state.thread_id, state.run_id)
 
-    async def _call_interrupt_manager(self, method: Any, *args: Any, **kwargs: Any) -> Any:
-        """Call the interrupt manager without blocking the event loop on durable stores."""
-        if self.interrupt_manager.uses_blocking_io():
-            return await asyncio.to_thread(method, *args, **kwargs)
-        return method(*args, **kwargs)
-
     async def _interrupt_bump_epoch(self, run_id: str) -> int:
         """Persist and return the next epoch for one run."""
-        return await self._call_interrupt_manager(self.interrupt_manager.bump_epoch, run_id)
+        return await self.interrupt_manager.bump_epoch(run_id)
 
     async def _interrupt_create(self, **kwargs: Any) -> InterruptRequest:
-        """Create one interrupt request through the manager boundary."""
-        return await self._call_interrupt_manager(self.interrupt_manager.create, **kwargs)
+        """Create one interrupt request."""
+        return await self.interrupt_manager.create(**kwargs)
 
     async def _interrupt_resolve(self, **kwargs: Any) -> Any:
-        """Resolve one interrupt request through the manager boundary."""
-        return await self._call_interrupt_manager(self.interrupt_manager.resolve, **kwargs)
+        """Resolve one interrupt request."""
+        return await self.interrupt_manager.resolve(**kwargs)
 
     async def _interrupt_list_pending(self, run_id: str) -> list[InterruptRequest]:
         """List pending interrupts for one run."""
-        return await self._call_interrupt_manager(self.interrupt_manager.list_pending, run_id)
+        return await self.interrupt_manager.list_pending(run_id)
 
     async def _interrupt_get_pending(self, run_id: str, interrupt_id: str) -> InterruptRequest | None:
         """Return one pending interrupt for one run."""
-        return await self._call_interrupt_manager(self.interrupt_manager.get_pending, run_id, interrupt_id)
+        return await self.interrupt_manager.get_pending(run_id, interrupt_id)
 
     async def _interrupt_get_latest_pending(self, run_id: str) -> InterruptRequest | None:
         """Return the newest pending interrupt for one run."""
-        return await self._call_interrupt_manager(self.interrupt_manager.get_latest_pending, run_id)
+        return await self.interrupt_manager.get_latest_pending(run_id)
 
     def _coerce_payload_dict(self, payload: Any) -> dict[str, Any]:
         """Normalize payloads for remote transport."""
