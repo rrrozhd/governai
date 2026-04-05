@@ -47,9 +47,9 @@ The runtime — not prompts, not application code — enforces what runs next, w
 - [x] Contract versioning — Validated in Phase 1: Foundations
 - [x] Agent asset definitions (AgentSpec) — Validated in Phase 2: Serializable Asset Layer
 - [x] Execution manifest model (ToolManifest) — Validated in Phase 2: Serializable Asset Layer
-- [ ] Rich thread lifecycle
-- [ ] Secrets-aware execution context
-- [ ] Audit event enrichment protocol
+- [x] Rich thread lifecycle — Validated in Phase 3: Runtime Depth
+- [x] Secrets-aware execution context — Validated in Phase 3: Runtime Depth
+- [x] Audit event enrichment protocol — Validated in Phase 3: Runtime Depth
 - [x] Interrupt TTL enforcement — Validated in Phase 1: Foundations
 - [ ] Memory connector protocol
 
