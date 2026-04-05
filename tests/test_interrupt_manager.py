@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import inspect
+import time
+
 import pytest
 
-from governai.runtime.interrupts import InterruptManager
+from governai.runtime.interrupts import InMemoryInterruptStore, InterruptManager, InterruptRequest, InterruptStore
 from governai.runtime.interrupts import RedisInterruptStore
+from governai.workflows.exceptions import InterruptExpiredError
 
 
 class FakeSyncRedis:
@@ -128,3 +132,133 @@ def test_redis_interrupt_store_preserves_expired_and_epoch_mismatch_behavior() -
     req2 = mgr_b.create(run_id="redis-expired", step_name="s2", message="Need input", epoch=mgr_b.bump_epoch("redis-expired"))
     with pytest.raises(ValueError, match="epoch mismatch"):
         mgr_b.resolve(run_id="redis-expired", interrupt_id=req2.interrupt_id, response="nope", epoch=req2.epoch + 1)
+
+
+# --- NEW TESTS: Async migration, InterruptExpiredError, sweep_expired ---
+
+
+@pytest.mark.asyncio
+async def test_resolve_expired_raises_interrupt_expired_error() -> None:
+    store = InMemoryInterruptStore()
+    mgr = InterruptManager(default_ttl_seconds=60, store=store)
+    req = InterruptRequest(
+        interrupt_id="exp-1",
+        run_id="r-exp",
+        step_name="s1",
+        message="test",
+        epoch=1,
+        created_at=int(time.time()) - 200,
+        expires_at=int(time.time()) - 100,
+        status="pending",
+    )
+    await store.save_request(req)
+    await store.set_epoch("r-exp", 1)
+
+    with pytest.raises(InterruptExpiredError) as exc_info:
+        await mgr.resolve(run_id="r-exp", interrupt_id="exp-1", response="yes")
+    assert exc_info.value.request.interrupt_id == "exp-1"
+
+
+@pytest.mark.asyncio
+async def test_interrupt_expired_error_carries_request() -> None:
+    store = InMemoryInterruptStore()
+    mgr = InterruptManager(default_ttl_seconds=60, store=store)
+    now = int(time.time())
+    req = InterruptRequest(
+        interrupt_id="exp-2",
+        run_id="r-exp2",
+        step_name="s1",
+        message="test",
+        epoch=1,
+        created_at=now - 200,
+        expires_at=now - 50,
+        status="pending",
+    )
+    await store.save_request(req)
+    await store.set_epoch("r-exp2", 1)
+
+    with pytest.raises(InterruptExpiredError) as exc_info:
+        await mgr.resolve(run_id="r-exp2", interrupt_id="exp-2", response="yes")
+    assert exc_info.value.request.expires_at < now
+    assert exc_info.value.request.status == "expired"
+
+
+@pytest.mark.asyncio
+async def test_sweep_expired_removes_global() -> None:
+    store = InMemoryInterruptStore()
+    now = int(time.time())
+    # 3 expired across 3 different runs
+    for i, run_id in enumerate(["run-a", "run-b", "run-c"]):
+        req = InterruptRequest(
+            interrupt_id=f"exp-{i}",
+            run_id=run_id,
+            step_name="s1",
+            message="test",
+            epoch=1,
+            created_at=now - 200,
+            expires_at=now - 100,
+            status="pending",
+        )
+        await store.save_request(req)
+    # 2 non-expired
+    for i, run_id in enumerate(["run-a", "run-d"]):
+        req = InterruptRequest(
+            interrupt_id=f"fresh-{i}",
+            run_id=run_id,
+            step_name="s1",
+            message="test",
+            epoch=1,
+            created_at=now,
+            expires_at=now + 3600,
+            status="pending",
+        )
+        await store.save_request(req)
+
+    count = await store.sweep_expired()
+    assert count == 3
+
+    # Remaining should be 2
+    remaining = 0
+    for run_id in ["run-a", "run-b", "run-c", "run-d"]:
+        remaining += len(await store.list_requests(run_id))
+    assert remaining == 2
+
+
+@pytest.mark.asyncio
+async def test_sweep_expired_returns_zero_when_none_expired() -> None:
+    store = InMemoryInterruptStore()
+    now = int(time.time())
+    req = InterruptRequest(
+        interrupt_id="fresh-only",
+        run_id="run-fresh",
+        step_name="s1",
+        message="test",
+        epoch=1,
+        created_at=now,
+        expires_at=now + 3600,
+        status="pending",
+    )
+    await store.save_request(req)
+    count = await store.sweep_expired()
+    assert count == 0
+
+
+def test_interrupt_store_methods_are_async() -> None:
+    methods = [
+        "get_epoch", "set_epoch", "save_request",
+        "get_request", "list_requests", "delete_request",
+        "sweep_expired",
+    ]
+    for name in methods:
+        method = getattr(InMemoryInterruptStore, name)
+        assert inspect.iscoroutinefunction(method), f"{name} should be async"
+
+
+def test_interrupt_manager_methods_are_async() -> None:
+    methods = [
+        "resolve", "create", "list_pending",
+        "get_pending", "bump_epoch", "current_epoch",
+    ]
+    for name in methods:
+        method = getattr(InterruptManager, name)
+        assert inspect.iscoroutinefunction(method), f"{name} should be async"
