@@ -7,6 +7,46 @@ from governai.models.run_state import RunState
 from governai.runtime.run_store import InMemoryRunStore, RedisRunStore
 
 
+class _FakePipeline:
+    """Minimal pipeline for FakeRedis supporting watch/multi/execute."""
+
+    def __init__(self, parent: "FakeRedis") -> None:
+        self._parent = parent
+        self._commands: list[tuple[str, tuple]] = []
+
+    async def __aenter__(self) -> "_FakePipeline":
+        return self
+
+    async def __aexit__(self, *args) -> None:
+        self._commands.clear()
+
+    async def watch(self, *keys: str) -> None:  # noqa: ARG002
+        pass
+
+    async def get(self, key: str):
+        return self._parent.data.get(key)
+
+    def multi(self) -> None:
+        pass
+
+    def set(self, key: str, value: str, ex: int | None = None) -> None:  # noqa: ARG002
+        self._commands.append(("set", (key, value)))
+
+    def rpush(self, key: str, value: str) -> None:
+        self._commands.append(("rpush", (key, value)))
+
+    async def execute(self) -> list:
+        results = []
+        for cmd, args in self._commands:
+            if cmd == "set":
+                self._parent.data[args[0]] = args[1]
+                results.append(True)
+            elif cmd == "rpush":
+                self._parent.lists.setdefault(args[0], []).append(args[1])
+                results.append(len(self._parent.lists[args[0]]))
+        return results
+
+
 class FakeRedis:
     def __init__(self) -> None:
         self.data: dict[str, str] = {}
@@ -42,6 +82,9 @@ class FakeRedis:
 
     async def aclose(self) -> None:
         return None
+
+    def pipeline(self, transaction: bool = True) -> _FakePipeline:  # noqa: ARG002
+        return _FakePipeline(self)
 
 
 def _state(run_id: str) -> RunState:

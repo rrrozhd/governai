@@ -113,7 +113,7 @@ from governai.runtime.interrupts import (
     RedisInterruptStore,
 )
 from governai.runtime.reducers import Reducer, ReducerRegistry
-from governai.runtime.run_store import InMemoryRunStore, RedisRunStore, RunStore, ThreadAwareRunStore
+from governai.runtime.run_store import InMemoryRunStore, RedisRunStore, RunStore, StateConcurrencyError, ThreadAwareRunStore
 from governai.sandbox import create_sandbox_app
 from governai.skills.base import Skill
 from governai.skills.registry import SkillRegistry
@@ -246,6 +246,7 @@ __all__ = [
     "RunState",
     "RunStatus",
     "RunStore",
+    "StateConcurrencyError",
     "Skill",
     "SkillRegistry",
     "SkillResolver",

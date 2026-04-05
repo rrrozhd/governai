@@ -1,11 +1,37 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from abc import ABC, abstractmethod
 from typing import Any, Protocol, runtime_checkable
 
 from governai.models.run_state import RunState
+
+try:
+    from redis.exceptions import WatchError
+except ImportError:
+
+    class WatchError(Exception):  # type: ignore[no-redef]
+        pass
+
+
+class StateConcurrencyError(RuntimeError):
+    """Raised when an optimistic lock conflict exhausts retries."""
+
+
+def _validate_state(state: RunState) -> None:
+    """Validate state consistency before persistence (PERS-03)."""
+    from governai.models.common import RunStatus
+
+    if state.status == RunStatus.WAITING_INTERRUPT and state.pending_interrupt_id is None:
+        raise ValueError(
+            f"Run {state.run_id}: status is WAITING_INTERRUPT but pending_interrupt_id is None"
+        )
+    if state.status == RunStatus.WAITING_APPROVAL and state.pending_approval is None:
+        raise ValueError(
+            f"Run {state.run_id}: status is WAITING_APPROVAL but pending_approval is None"
+        )
 
 
 @runtime_checkable
@@ -33,7 +59,11 @@ class RunStore(ABC):
 
     @abstractmethod
     async def put(self, state: RunState) -> None:
-        """Persist a run state snapshot."""
+        """Atomically persist a run state snapshot.
+
+        Validates state consistency before writing. Raises StateConcurrencyError
+        if optimistic lock conflict cannot be resolved after retries.
+        """
 
     @abstractmethod
     async def get(self, run_id: str) -> RunState | None:
@@ -89,7 +119,16 @@ class InMemoryRunStore(RunStore):
             self._thread_runs.pop(thread_id, None)
 
     async def put(self, state: RunState) -> None:
-        """Persist latest run snapshot and assign/write a checkpoint id."""
+        """Persist latest run snapshot with epoch-based CAS and validation."""
+        _validate_state(state)
+        existing = self._state.get(state.run_id)
+        if existing is not None and existing.epoch > state.epoch:
+            raise StateConcurrencyError(
+                f"Stale write for run {state.run_id}: "
+                f"store epoch={existing.epoch}, write epoch={state.epoch}"
+            )
+        new_epoch = (existing.epoch if existing is not None else 0) + 1
+        state.epoch = new_epoch
         checkpoint_id = await self.write_checkpoint(state)
         state.checkpoint_id = checkpoint_id
         self._state[state.run_id] = state.model_copy(deep=True)
@@ -280,16 +319,59 @@ class RedisRunStore(RunStore):
         await self._maybe_expire(key)
 
     async def put(self, state: RunState) -> None:
-        """Persist latest run snapshot and assign/write a checkpoint id."""
-        checkpoint_id = await self.write_checkpoint(state)
-        state.checkpoint_id = checkpoint_id
+        """Atomically persist run snapshot using WATCH/MULTI/EXEC with retry."""
+        _validate_state(state)
         client = await self._client()
-        payload = state.model_dump_json()
-        key = self._key(state.run_id)
-        if self.ttl_seconds is None:
-            await client.set(key, payload)
-        else:
-            await client.set(key, payload, ex=int(self.ttl_seconds))
+        run_key = self._key(state.run_id)
+        checkpoint_id = state.checkpoint_id or str(uuid.uuid4())
+        retries = 3
+        delay = 0.05
+
+        for attempt in range(retries + 1):
+            async with client.pipeline(transaction=True) as pipe:
+                try:
+                    await pipe.watch(run_key)
+                    raw = await pipe.get(run_key)
+                    if raw is not None:
+                        text = self._decode_text(raw)
+                        if text:
+                            existing = RunState.model_validate_json(text)
+                            if existing.epoch > state.epoch:
+                                raise StateConcurrencyError(
+                                    f"Stale write for run {state.run_id}: "
+                                    f"store epoch={existing.epoch}, write epoch={state.epoch}"
+                                )
+                            state.epoch = existing.epoch + 1
+                    else:
+                        state.epoch = 1
+                    state.checkpoint_id = checkpoint_id
+                    payload = state.model_dump_json()
+                    pipe.multi()
+                    if self.ttl_seconds is None:
+                        pipe.set(run_key, payload)
+                    else:
+                        pipe.set(run_key, payload, ex=int(self.ttl_seconds))
+                    cp_key = self._checkpoint_key(checkpoint_id)
+                    if self.ttl_seconds is None:
+                        pipe.set(cp_key, payload)
+                    else:
+                        pipe.set(cp_key, payload, ex=int(self.ttl_seconds))
+                    pipe.rpush(
+                        self._thread_checkpoint_index_key(state.thread_id),
+                        checkpoint_id,
+                    )
+                    await pipe.execute()
+                    break
+                except StateConcurrencyError:
+                    raise
+                except WatchError:
+                    if attempt >= retries:
+                        raise StateConcurrencyError(
+                            f"Optimistic lock conflict on run {state.run_id} "
+                            f"after {retries} retries"
+                        ) from None
+                    await asyncio.sleep(delay * (2**attempt))
+        await self._maybe_expire(self._thread_checkpoint_index_key(state.thread_id))
         await self._record_thread_run(state.thread_id, state.run_id)
 
     async def get(self, run_id: str) -> RunState | None:

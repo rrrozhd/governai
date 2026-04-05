@@ -209,11 +209,18 @@ def test_validate_state_accepts_valid_state() -> None:
 def test_inmemory_put_rejects_stale_epoch() -> None:
     async def run() -> None:
         store = InMemoryRunStore()
-        s = _state("r1", epoch=0)
-        await store.put(s)  # epoch becomes 1
+        # First put: epoch 0 -> stored as 1
+        s1 = _state("r1", epoch=0)
+        await store.put(s1)
+        # Second put: epoch 1 -> stored as 2
+        s2 = _state("r1", epoch=1)
+        await store.put(s2)
+        loaded = await store.get("r1")
+        assert loaded is not None
+        assert loaded.epoch == 2
 
+        # Now store is at epoch=2, put with epoch=1 should be rejected
         stale = _state("r1", epoch=1)
-        # Store has epoch=1, stale write also epoch=1 => store.epoch >= write.epoch => reject
         with pytest.raises(StateConcurrencyError, match="Stale write"):
             await store.put(stale)
 
@@ -229,36 +236,7 @@ def test_inmemory_put_auto_increments_epoch() -> None:
         assert loaded is not None
         assert loaded.epoch == 1
 
-        # Put again with fresh epoch
-        s2 = _state("r1", epoch=1)
-        # epoch=1 is not stale because existing.epoch=1 >= write.epoch=1 => stale
-        # So we need epoch > existing to succeed... but the plan says
-        # put(state with epoch=1) after get()->epoch=1 should succeed
-        # Actually: existing.epoch(1) >= state.epoch(1) => stale. Hmm.
-        # Re-reading plan: "put(state with epoch=1) -> get() -> epoch=2"
-        # This means existing.epoch=1, write.epoch=1 => should REJECT?
-        # Wait no: the test says "put again with epoch=1 -> get() -> epoch=2"
-        # That implies epoch=1 is stale but wait... Let me re-read the plan.
-        # "put(state with epoch=0), then get() -> epoch=1;
-        #  put again with epoch=1 -> get() -> epoch=2 (auto-increment inside put)"
-        # So epoch=1 write against stored epoch=1 should... succeed?
-        # The condition is: existing.epoch >= state.epoch => reject.
-        # 1 >= 1 is true => reject. But the plan test says it succeeds.
-        # Let me check: the plan says "existing is not None and existing.epoch >= state.epoch"
-        # Wait, the plan action code says:
-        #   if existing is not None and existing.epoch >= state.epoch:
-        #       raise StateConcurrencyError
-        # But then test says put(epoch=1) after epoch=1 should succeed -> contradiction.
-        # The plan behavior says: "put again with epoch=1 -> get() -> epoch=2"
-        # This implies the check should be: existing.epoch > state.epoch (strictly greater)
-        # NOT >=. Let me look at the stale test: "store has state at epoch=2,
-        # put(state with epoch=1) raises StateConcurrencyError"
-        # epoch=2 > epoch=1 => stale. Makes sense with strict >.
-        # But with >=: epoch=2 >= 1 also works.
-        # The auto-increment test: existing epoch=1, write epoch=1:
-        #   With >: 1 > 1 is false => accepts. Good.
-        #   With >=: 1 >= 1 is true => rejects. Bad.
-        # So the condition must be strictly >. I'll implement accordingly.
+        # Put again with epoch=1 (matches stored epoch) -> should succeed, epoch becomes 2
         s2 = _state("r1", epoch=1)
         await store.put(s2)
         loaded2 = await store.get("r1")

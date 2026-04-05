@@ -168,11 +168,12 @@ class LocalRuntime:
         """Start a new workflow run and advance until blocked or completed."""
         # Every run starts with a fresh epoch for interrupt race protection.
         run_id = str(uuid.uuid4())
-        epoch = await self._interrupt_bump_epoch(run_id)
+        # Bump interrupt manager epoch; put() auto-increments run state epoch.
+        await self._interrupt_bump_epoch(run_id)
         state = RunState(
             run_id=run_id,
             thread_id=thread_id,
-            epoch=epoch,
+            epoch=0,
             workflow_name=workflow.name,
             status=RunStatus.PENDING,
             current_step=workflow.entry_step_name,
@@ -224,7 +225,8 @@ class LocalRuntime:
         restored.status = RunStatus.RUNNING
         restored.metadata.pop("pending_input", None)
         restored.metadata.pop("pending_interrupt_resume", None)
-        restored.epoch = await self._interrupt_bump_epoch(run_id)
+        # Epoch is auto-incremented by put(); bump interrupt manager separately.
+        await self._interrupt_bump_epoch(run_id)
         restored.touch()
         await self._persist_state(restored)
         await self._register_active_run(restored)
@@ -345,7 +347,8 @@ class LocalRuntime:
 
         state.pending_interrupt_id = None
         state.status = RunStatus.RUNNING
-        state.epoch = await self._interrupt_bump_epoch(state.run_id)
+        # Epoch is auto-incremented by put(); bump interrupt manager separately.
+        await self._interrupt_bump_epoch(state.run_id)
         state.touch()
         await self._persist_state(state)
         await self._emit_audit_event(
@@ -573,6 +576,10 @@ class LocalRuntime:
                 }
                 state.touch()
                 await self._persist_state(state)
+                # Sync interrupt epoch to match post-persist state epoch
+                if request.epoch != state.epoch:
+                    request.epoch = state.epoch
+                    await self.interrupt_manager.store.save_request(request)
                 await self._emit_audit_event(
             run_id=state.run_id,
                     workflow_name=state.workflow_name,
