@@ -13,6 +13,11 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+class AuditExtension(BaseModel):
+    type_key: str
+    data: dict[str, Any] = Field(default_factory=dict)
+
+
 class AuditEvent(BaseModel):
     event_id: str
     timestamp: datetime = Field(default_factory=_utcnow)
@@ -22,3 +27,4 @@ class AuditEvent(BaseModel):
     step_name: str | None = None
     event_type: EventType
     payload: dict[str, Any] = Field(default_factory=dict)
+    extensions: list[AuditExtension] = Field(default_factory=list)

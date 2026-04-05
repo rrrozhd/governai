@@ -53,6 +53,12 @@ class EventType(str, Enum):
     TRANSITION_CHOSEN = "transition_chosen"
     RUN_COMPLETED = "run_completed"
     RUN_FAILED = "run_failed"
+    THREAD_CREATED = "thread_created"
+    THREAD_ACTIVE = "thread_active"
+    THREAD_INTERRUPTED = "thread_interrupted"
+    THREAD_IDLE = "thread_idle"
+    THREAD_ARCHIVED = "thread_archived"
+    CAPABILITY_DENIED = "capability_denied"
 
 
 def normalize_step_ref(value: str) -> str:
