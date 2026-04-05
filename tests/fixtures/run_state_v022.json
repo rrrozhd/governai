@@ -1,0 +1,20 @@
+{
+  "run_id": "run-v022-fixture",
+  "thread_id": "thread-v022",
+  "checkpoint_id": "cp-v022-1",
+  "parent_checkpoint_id": null,
+  "epoch": 0,
+  "workflow_name": "LegacyWorkflow",
+  "status": "RUNNING",
+  "current_step": "step_one",
+  "completed_steps": [],
+  "artifacts": {"input": "hello"},
+  "channels": {},
+  "pending_approval": null,
+  "pending_interrupt_id": null,
+  "started_at": "2024-12-01T10:00:00Z",
+  "updated_at": "2024-12-01T10:01:00Z",
+  "error": null,
+  "metadata": {"source": "v0.2.2-test"},
+  "some_future_field": "should_be_ignored"
+}
