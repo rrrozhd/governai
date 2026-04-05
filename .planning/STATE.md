@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.3.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-runtime-depth plan 03 (ThreadStore)
-last_updated: "2026-04-05T15:30:27.940Z"
+stopped_at: Completed 03-runtime-depth-01-PLAN.md
+last_updated: "2026-04-05T15:31:22.843Z"
 last_activity: 2026-04-05
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 10
-  completed_plans: 8
+  completed_plans: 9
   percent: 8
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-04-05)
 ## Current Position
 
 Phase: 03 (runtime-depth) — EXECUTING
-Plan: 2 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-04-05
 
@@ -54,6 +54,8 @@ Progress: [█░░░░░░░░░] 8%
 *Updated after each plan completion*
 | Phase 02 P02 | 3min | 1 tasks | 4 files |
 | Phase 03-runtime-depth P03 | 2min | 1 tasks | 2 files |
+| Phase 03-runtime-depth P01 | 4min | 1 tasks | 4 files |
+| Phase 03-runtime-depth P02 | 3min | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -72,6 +74,8 @@ Recent decisions affecting current work:
 - Schema fingerprint: blake2b with 16-byte digest (32-char hex), computed once at registration time.
 - [Phase 02]: ToolManifest uses lazy import in to_manifest() to avoid circular dependency with base.py
 - [Phase 03-runtime-depth]: ThreadStore: archive() delegates to transition(ARCHIVED) preserving record; ALLOWED_THREAD_TRANSITIONS dict enforces O(1) state machine; model_copy(deep=True) on all returned records
+- [Phase 03-runtime-depth]: No central extension registry: consumers subclass AuditExtension directly with fixed type_key (D-14)
+- [Phase 03-runtime-depth]: AuditEvent.extensions defaults to [] via Field(default_factory=list) for v0.2.2 backward compat
 
 ### Pending Todos
 
@@ -85,6 +89,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-05T15:30:27.938Z
-Stopped at: Completed 03-runtime-depth plan 03 (ThreadStore)
+Last session: 2026-04-05T15:31:13.134Z
+Stopped at: Completed 03-runtime-depth-01-PLAN.md
 Resume file: None

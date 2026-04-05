@@ -39,9 +39,9 @@ Requirements for v0.3.0 Governance Depth. Each maps to roadmap phases.
 - [ ] **SEC-01**: SecretsProvider protocol defines resolve(key) -> str for late-bound secret resolution
 - [ ] **SEC-02**: ExecutionContext receives an optional SecretsProvider; tools access secrets at call time
 - [ ] **SEC-03**: AuditEmitter applies redaction pass — known secret values are replaced with [REDACTED] before persistence
-- [ ] **AUD-01**: AuditEvent carries a typed extensions field for consumer-provided metadata
-- [ ] **AUD-02**: AuditExtensionProtocol defines how extensions are registered and serialized
-- [ ] **AUD-03**: Emitters serialize extensions alongside base event fields transparently
+- [x] **AUD-01**: AuditEvent carries a typed extensions field for consumer-provided metadata
+- [x] **AUD-02**: AuditExtensionProtocol defines how extensions are registered and serialized
+- [x] **AUD-03**: Emitters serialize extensions alongside base event fields transparently
 
 ### Thread & Memory
 
@@ -123,9 +123,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SEC-01 | Phase 3 | Pending |
 | SEC-02 | Phase 3 | Pending |
 | SEC-03 | Phase 3 | Pending |
-| AUD-01 | Phase 3 | Pending |
-| AUD-02 | Phase 3 | Pending |
-| AUD-03 | Phase 3 | Pending |
+| AUD-01 | Phase 3 | Complete |
+| AUD-02 | Phase 3 | Complete |
+| AUD-03 | Phase 3 | Complete |
 | THR-01 | Phase 3 | Complete |
 | THR-02 | Phase 3 | Complete |
 | THR-03 | Phase 3 | Complete |
