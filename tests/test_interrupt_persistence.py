@@ -54,31 +54,39 @@ class AsyncFakeRedis:
         return None
 
 
-class SyncFakeRedis:
+class InterruptAsyncFakeRedis:
+    """Async fake redis for the interrupt store (which is now fully async)."""
+
     def __init__(self) -> None:
         self.data: dict[str, str] = {}
         self.lists: dict[str, list[str]] = {}
 
-    def set(self, key: str, value: str) -> None:
+    async def set(self, key: str, value: str, ex: int | None = None) -> None:  # noqa: ARG002
         self.data[key] = value
 
-    def get(self, key: str):
+    async def get(self, key: str):
         return self.data.get(key)
 
-    def delete(self, key: str) -> None:
+    async def delete(self, key: str) -> None:
         self.data.pop(key, None)
         self.lists.pop(key, None)
 
-    def rpush(self, key: str, value: str) -> None:
+    async def rpush(self, key: str, value: str) -> None:
         self.lists.setdefault(key, []).append(value)
 
-    def lrange(self, key: str, start: int, stop: int):  # noqa: ARG002
+    async def lrange(self, key: str, start: int, stop: int):  # noqa: ARG002
         values = self.lists.get(key, [])
         if stop == -1:
             stop = len(values) - 1
         return values[start : stop + 1]
 
-    def close(self) -> None:
+    async def scan(self, cursor: int, match: str | None = None, count: int | None = None) -> tuple[int, list[str]]:  # noqa: ARG002
+        import fnmatch
+
+        matched = [k for k in self.data if match is None or fnmatch.fnmatch(k, match)]
+        return (0, matched)
+
+    async def aclose(self) -> None:
         return None
 
 
@@ -117,9 +125,9 @@ class InterruptFlow(Workflow[AskInput, ReplyOut]):
 def test_redis_interrupt_store_survives_runtime_recreation_and_supports_thread_helpers() -> None:
     async def run() -> None:
         async_redis = AsyncFakeRedis()
-        sync_redis = SyncFakeRedis()
+        interrupt_redis = InterruptAsyncFakeRedis()
         run_store = RedisRunStore(redis_url="redis://unused", redis_client=async_redis)
-        interrupt_store = RedisInterruptStore(redis_url="redis://unused", redis_client=sync_redis)
+        interrupt_store = RedisInterruptStore(redis_url="redis://unused", redis_client=interrupt_redis)
 
         flow_a = InterruptFlow(
             run_store=run_store,
@@ -134,7 +142,7 @@ def test_redis_interrupt_store_survives_runtime_recreation_and_supports_thread_h
 
         flow_b = InterruptFlow(
             run_store=run_store,
-            interrupt_store=RedisInterruptStore(redis_url="redis://unused", redis_client=sync_redis),
+            interrupt_store=RedisInterruptStore(redis_url="redis://unused", redis_client=interrupt_redis),
             channel_reducers={"history": "merge"},
             channel_defaults={"history": {}},
         )

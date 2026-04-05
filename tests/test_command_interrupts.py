@@ -15,6 +15,7 @@ from governai import (
     step,
     tool,
 )
+from governai.workflows.exceptions import InterruptExpiredError
 
 
 class AskInput(BaseModel):
@@ -113,7 +114,7 @@ def test_command_interrupt_ttl_expired() -> None:
         flow = ExpiredInterruptFlow()
         state = await flow.run(AskInput(value=3))
         assert state.pending_interrupt_id is not None
-        with pytest.raises(ValueError):
+        with pytest.raises(InterruptExpiredError):
             await flow.resume(
                 state.run_id,
                 ResumeInterrupt(

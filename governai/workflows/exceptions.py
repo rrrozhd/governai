@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from governai.runtime.interrupts import InterruptRequest
+
 
 class WorkflowError(Exception):
     """Base workflow error."""
@@ -39,3 +44,15 @@ class PolicyDeniedError(WorkflowError):
 
 class ContainmentPolicyError(WorkflowError):
     """Raised when execution placement violates configured containment rules."""
+
+
+class InterruptError(WorkflowError):
+    """Base class for interrupt lifecycle errors."""
+
+
+class InterruptExpiredError(InterruptError):
+    """Raised when resolving an interrupt that has already expired."""
+
+    def __init__(self, message: str, *, request: InterruptRequest) -> None:
+        super().__init__(message)
+        self.request = request
