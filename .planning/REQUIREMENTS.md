@@ -12,9 +12,9 @@ Requirements for v0.3.0 Governance Depth. Each maps to roadmap phases.
 - [ ] **PERS-01**: Runtime persists run state atomically — a crash between write and cache never leaves state inconsistent
 - [ ] **PERS-02**: RedisRunStore uses optimistic locking (WATCH/MULTI/EXEC) for compare-and-swap writes
 - [ ] **PERS-03**: Runtime validates handoff targets, command state updates, and transitions before persisting state
-- [ ] **POL-01**: Policy engine isolates each policy evaluation — a crashing or hung policy does not terminate the run
-- [ ] **POL-02**: Each policy can declare a timeout; engine enforces it via asyncio.wait_for
-- [ ] **POL-03**: Policy exceptions are caught, audited, and converted to deny decisions with diagnostic reason
+- [x] **POL-01**: Policy engine isolates each policy evaluation — a crashing or hung policy does not terminate the run
+- [x] **POL-02**: Each policy can declare a timeout; engine enforces it via asyncio.wait_for
+- [x] **POL-03**: Policy exceptions are caught, audited, and converted to deny decisions with diagnostic reason
 - [ ] **INT-01**: Interrupt resolution rejects expired interrupts with a typed InterruptExpiredError
 - [ ] **INT-02**: InterruptStore provides a sweep API to clean up stale interrupts
 - [ ] **INT-03**: RedisInterruptStore uses async Redis client (migrated from sync redis.Redis)
@@ -102,9 +102,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PERS-01 | Phase 2 | Pending |
 | PERS-02 | Phase 2 | Pending |
 | PERS-03 | Phase 2 | Pending |
-| POL-01 | Phase 1 | Pending |
-| POL-02 | Phase 1 | Pending |
-| POL-03 | Phase 1 | Pending |
+| POL-01 | Phase 1 | Complete |
+| POL-02 | Phase 1 | Complete |
+| POL-03 | Phase 1 | Complete |
 | INT-01 | Phase 1 | Pending |
 | INT-02 | Phase 1 | Pending |
 | INT-03 | Phase 1 | Pending |
