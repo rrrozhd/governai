@@ -26,7 +26,7 @@ from governai.models.common import DeterminismMode, END_STEP, EventType, RunStat
 from governai.models.policy import PolicyContext
 from governai.models.resume import ResumeApproval, ResumeInterrupt, ResumePayload
 from governai.models.run_state import RunState
-from governai.policies.base import run_policy
+from governai.policies.base import _run_policy_isolated, run_policy
 from governai.policies.engine import PolicyEngine
 from governai.runtime.context import ExecutionContext
 from governai.runtime.interrupts import InterruptManager, InterruptRequest
@@ -676,7 +676,8 @@ class LocalRuntime:
     ) -> None:
         """Run all policies for a workflow and raise on first deny decision."""
         for policy_name, policy_func in self.policy_engine.policies_for(workflow.name):
-            decision = await run_policy(policy_func, ctx)
+            timeout = getattr(policy_func, "__policy_timeout__", None)
+            decision = await _run_policy_isolated(policy_func, ctx, policy_name, timeout)
             await self._emit_audit_event(
             run_id=state.run_id,
                 workflow_name=state.workflow_name,
