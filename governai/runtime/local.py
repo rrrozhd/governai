@@ -27,11 +27,14 @@ from governai.models.policy import PolicyContext
 from governai.models.resume import ResumeApproval, ResumeInterrupt, ResumePayload
 from governai.models.run_state import RunState
 from governai.policies.base import _run_policy_isolated, run_policy
+from governai.policies.capability import CapabilityGrant, make_capability_policy
 from governai.policies.engine import PolicyEngine
 from governai.runtime.context import ExecutionContext
 from governai.runtime.interrupts import InterruptManager, InterruptRequest
 from governai.runtime.reducers import Reducer, ReducerRegistry
 from governai.runtime.run_store import InMemoryRunStore, RunStore, ThreadAwareRunStore
+from governai.runtime.secrets import NullSecretsProvider, RedactingAuditEmitter, SecretRegistry, SecretsProvider
+from governai.runtime.thread_store import InMemoryThreadStore, ThreadRecord, ThreadStore
 from governai.tools.base import Tool, ToolValidationError
 from governai.workflows.exceptions import (
     ApprovalRejectedError,
@@ -67,6 +70,9 @@ class LocalRuntime:
         channel_defaults: dict[str, Any] | None = None,
         containment_mode: ContainmentMode = "local_dev",
         remote_execution_adapter: RemoteExecutionAdapter | None = None,
+        grants: list[CapabilityGrant] | None = None,
+        secrets_provider: SecretsProvider | None = None,
+        thread_store: ThreadStore | None = None,
     ) -> None:
         """Initialize the local in-process runtime with governance defaults."""
         from governai.agents.registry import AgentRegistry
@@ -85,6 +91,20 @@ class LocalRuntime:
         self.containment_mode = containment_mode
         self.remote_execution_adapter = remote_execution_adapter
         self._runs: dict[str, RunState] = {}
+
+        # Per D-03: Auto-register capability policy when grants provided
+        if grants is not None:
+            cap_policy = make_capability_policy(grants)
+            self.policy_engine.register(cap_policy, name="capability_policy")
+
+        # Per D-10, D-11: Secret registry + optional redacting emitter wrapper
+        self.secret_registry = SecretRegistry()
+        self._secrets_provider = secrets_provider or NullSecretsProvider()
+        if secrets_provider is not None:
+            self.audit_emitter = RedactingAuditEmitter(self.audit_emitter, self.secret_registry)
+
+        # Per D-08: Thread lifecycle store (defaults to in-memory)
+        self.thread_store = thread_store or InMemoryThreadStore()
 
     def validate_workflow(self, workflow: Any) -> None:
         """Fail fast when workflow placement violates configured containment rules."""
@@ -163,6 +183,26 @@ class LocalRuntime:
             pending.extend(await self.list_pending_interrupts(run_id))
         pending.sort(key=lambda item: (item.created_at, item.interrupt_id))
         return pending
+
+    async def archive_thread(
+        self, thread_id: str, *, run_id: str | None = None, workflow_name: str = ""
+    ) -> ThreadRecord:
+        """Archive a thread and emit THREAD_ARCHIVED audit event.
+
+        Per D-08: Thread archival emits a THREAD_ARCHIVED audit event.
+        Consistent with interrupt event pattern — store handles data,
+        runtime handles audit emission.
+        """
+        record = await self.thread_store.archive(thread_id)
+        await emit_event(
+            self.audit_emitter,
+            run_id=run_id or "",
+            thread_id=thread_id,
+            workflow_name=workflow_name,
+            event_type=EventType.THREAD_ARCHIVED,
+            payload={"thread_id": thread_id, "run_ids": record.run_ids},
+        )
+        return record
 
     async def run_workflow(self, workflow: Any, data: Any, *, thread_id: str | None = None) -> RunState:
         """Start a new workflow run and advance until blocked or completed."""
@@ -755,6 +795,8 @@ class LocalRuntime:
             channels=state.channels,
             metadata=state.metadata,
             approval_request=state.pending_approval,
+            secrets_provider=self._secrets_provider,
+            secret_registry=self.secret_registry,
         )
 
         try:
@@ -857,6 +899,8 @@ class LocalRuntime:
             channels=state.channels,
             metadata=state.metadata,
             approval_request=state.pending_approval,
+            secrets_provider=self._secrets_provider,
+            secret_registry=self.secret_registry,
         )
 
         async def tool_caller(tool_name: str, tool_payload: Any) -> dict[str, Any]:
