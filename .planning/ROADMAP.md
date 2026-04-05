@@ -46,7 +46,12 @@ Plans:
   3. Zeroth's existing flow construction (GovernedFlowSpec + GovernedStepSpec) passes validation unchanged after AgentSpec and ToolManifest land — no new required fields
   4. A crash simulated between state write and cache invalidation leaves the run store in the last successfully committed state (WATCH/MULTI/EXEC atomic write is verified by test)
   5. A v0.2.2-format RunState JSON fixture deserializes without ValidationError after the new persistence layer ships
-**Plans**: TBD
+**Plans:** 3 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — AgentSpec serializable descriptor (AgentSpec, ModelSchemaRef, ModelRegistry, to_spec/from_spec)
+- [ ] 02-02-PLAN.md — ToolManifest read-only descriptor (ToolManifest, Tool.to_manifest() with inline fingerprint)
+- [ ] 02-03-PLAN.md — Atomic persistence (WATCH/MULTI/EXEC, epoch CAS, state validation, v0.2.2 fixture)
 
 ### Phase 3: Runtime Depth
 **Goal**: The policy engine enforces declared capability grants before execution, thread lifecycle is tracked and auditable through all state transitions including archival, secrets are resolved at call time and never appear in persisted audit events, and audit events carry typed extension metadata from consumers
@@ -78,6 +83,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundations | 3/3 | Executing | - |
-| 2. Serializable Asset Layer | 0/TBD | Not started | - |
+| 2. Serializable Asset Layer | 0/3 | Not started | - |
 | 3. Runtime Depth | 0/TBD | Not started | - |
 | 4. Memory Layer | 0/TBD | Not started | - |
