@@ -94,8 +94,8 @@ def test_governed_step_spec_version_explicit() -> None:
 
 def test_tool_registry_versioned_key() -> None:
     registry = ToolRegistry()
-    t1 = Tool(name="calc", version="1.0.0", input_model=TestInput, output_model=TestOutput)
-    t2 = Tool(name="calc", version="2.0.0", input_model=TestInput, output_model=TestOutput)
+    t1 = Tool(name="calc", version="1.0.0", input_model=TestInput, output_model=TestOutput, remote_name="calc-v1")
+    t2 = Tool(name="calc", version="2.0.0", input_model=TestInput, output_model=TestOutput, remote_name="calc-v2")
     registry.register(t1)
     registry.register(t2)
     assert registry.get("calc", "1.0.0").version == "1.0.0"

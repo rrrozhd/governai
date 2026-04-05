@@ -48,6 +48,7 @@ class Tool(Generic[InModelT, OutModelT]):
         self,
         *,
         name: str,
+        version: str = "0.0.0",
         description: str = "",
         input_model: type[InModelT],
         output_model: type[OutModelT],
@@ -62,6 +63,8 @@ class Tool(Generic[InModelT, OutModelT]):
     ) -> None:
         """Initialize Tool."""
         self.name = name
+        self.version = version
+        self.schema_fingerprint: str | None = None
         self.description = description
         self.input_model = input_model
         self.output_model = output_model
