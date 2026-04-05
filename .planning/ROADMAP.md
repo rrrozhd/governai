@@ -50,7 +50,7 @@ Plans:
 
 Plans:
 - [ ] 02-01-PLAN.md — AgentSpec serializable descriptor (AgentSpec, ModelSchemaRef, ModelRegistry, to_spec/from_spec)
-- [ ] 02-02-PLAN.md — ToolManifest read-only descriptor (ToolManifest, Tool.to_manifest() with inline fingerprint)
+- [x] 02-02-PLAN.md — ToolManifest read-only descriptor (ToolManifest, Tool.to_manifest() with inline fingerprint)
 - [ ] 02-03-PLAN.md — Atomic persistence (WATCH/MULTI/EXEC, epoch CAS, state validation, v0.2.2 fixture)
 
 ### Phase 3: Runtime Depth

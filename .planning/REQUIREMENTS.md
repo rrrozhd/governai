@@ -27,9 +27,9 @@ Requirements for v0.3.0 Governance Depth. Each maps to roadmap phases.
 - [ ] **SPEC-01**: AgentSpec is a serializable Pydantic model extracting all non-callable fields from Agent
 - [ ] **SPEC-02**: Agent.from_spec(spec) factory creates a runtime Agent from an AgentSpec
 - [ ] **SPEC-03**: AgentSpec is JSON-serializable via model_dump_json() with schemas as JSON Schema dicts
-- [ ] **MFST-01**: ToolManifest is a serializable Pydantic model describing a tool without the Python callable
-- [ ] **MFST-02**: Tool.to_manifest() extracts a ToolManifest from a live Tool instance
-- [ ] **MFST-03**: ToolManifest carries input/output schemas, capabilities, placement, and version
+- [x] **MFST-01**: ToolManifest is a serializable Pydantic model describing a tool without the Python callable
+- [x] **MFST-02**: Tool.to_manifest() extracts a ToolManifest from a live Tool instance
+- [x] **MFST-03**: ToolManifest carries input/output schemas, capabilities, placement, and version
 
 ### Governance Depth
 
@@ -114,9 +114,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SPEC-01 | Phase 2 | Pending |
 | SPEC-02 | Phase 2 | Pending |
 | SPEC-03 | Phase 2 | Pending |
-| MFST-01 | Phase 2 | Pending |
-| MFST-02 | Phase 2 | Pending |
-| MFST-03 | Phase 2 | Pending |
+| MFST-01 | Phase 2 | Complete |
+| MFST-02 | Phase 2 | Complete |
+| MFST-03 | Phase 2 | Complete |
 | CAP-01 | Phase 3 | Pending |
 | CAP-02 | Phase 3 | Pending |
 | CAP-03 | Phase 3 | Pending |
