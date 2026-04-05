@@ -43,14 +43,14 @@ The runtime — not prompts, not application code — enforces what runs next, w
 ### Active
 
 - [ ] Transactional state persistence
-- [ ] Policy fault isolation and capability model
-- [ ] Contract versioning
+- [x] Policy fault isolation and capability model — Validated in Phase 1: Foundations
+- [x] Contract versioning — Validated in Phase 1: Foundations
 - [ ] Agent asset definitions (AgentSpec)
 - [ ] Execution manifest model (ToolManifest)
 - [ ] Rich thread lifecycle
 - [ ] Secrets-aware execution context
 - [ ] Audit event enrichment protocol
-- [ ] Interrupt TTL enforcement
+- [x] Interrupt TTL enforcement — Validated in Phase 1: Foundations
 - [ ] Memory connector protocol
 
 ### Out of Scope
