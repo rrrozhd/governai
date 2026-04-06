@@ -83,7 +83,7 @@ Plans:
 
 Plans:
 - [x] 04-01-PLAN.md — Memory module foundation (MemoryScope, MemoryEntry, MemoryConnector protocol, DictMemoryConnector, AuditingMemoryConnector, EventType additions)
-- [ ] 04-02-PLAN.md — Runtime wiring (ScopedMemoryConnector, ExecutionContext ctx.memory, LocalRuntime integration, public exports)
+- [x] 04-02-PLAN.md — Runtime wiring (ScopedMemoryConnector, ExecutionContext ctx.memory, LocalRuntime integration, public exports)
 
 ## Progress
 

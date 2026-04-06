@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.3.0
 milestone_name: milestone
-status: executing
-stopped_at: Completed 04-01-PLAN.md
-last_updated: "2026-04-06T09:46:00Z"
-last_activity: 2026-04-06 -- Phase 04 Plan 01 complete
+status: verifying
+stopped_at: Completed 04-02-PLAN.md
+last_updated: "2026-04-06T09:54:58.595Z"
+last_activity: 2026-04-06
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 12
-  completed_plans: 11
+  completed_plans: 12
   percent: 91
 ---
 
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-04-05)
 
 Phase: 04 (memory-layer) — EXECUTING
 Plan: 2 of 2
-Status: Plan 01 complete, executing Plan 02
-Last activity: 2026-04-06 -- Phase 04 Plan 01 complete
+Status: Phase complete — ready for verification
+Last activity: 2026-04-06
 
 Progress: [█████████░] 91%
 
@@ -57,6 +57,7 @@ Progress: [█████████░] 91%
 | Phase 03-runtime-depth P01 | 4min | 1 tasks | 4 files |
 | Phase 03-runtime-depth P02 | 3min | 1 tasks | 2 files |
 | Phase 04-memory-layer P01 | 4min | 2 tasks | 7 files |
+| Phase 04-memory-layer P02 | 4min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -83,6 +84,8 @@ Recent decisions affecting current work:
 - [Phase 04-memory-layer]: DictMemoryConnector returns model_copy(deep=True) on reads for isolation
 - [Phase 04-memory-layer]: AuditingMemoryConnector checks existence via read() before write() to determine created flag
 - [Phase 04-memory-layer]: AuditingMemoryConnector.delete() uses try/finally to emit audit even on KeyError (D-26)
+- [Phase 04-memory-layer]: ScopedMemoryConnector is a thin wrapper delegating to inner connector with resolved target
+- [Phase 04-memory-layer]: AuditingMemoryConnector wrapping happens per-execution in ExecutionContext.__init__(), not in LocalRuntime.__init__()
 
 ### Pending Todos
 
@@ -96,6 +99,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-06T09:46:00Z
-Stopped at: Completed 04-01-PLAN.md
-Resume file: .planning/phases/04-memory-layer/04-02-PLAN.md
+Last session: 2026-04-06T09:54:58.592Z
+Stopped at: Completed 04-02-PLAN.md
+Resume file: None
