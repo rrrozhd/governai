@@ -59,6 +59,10 @@ class EventType(str, Enum):
     THREAD_IDLE = "thread_idle"
     THREAD_ARCHIVED = "thread_archived"
     CAPABILITY_DENIED = "capability_denied"
+    MEMORY_READ = "memory_read"
+    MEMORY_WRITE = "memory_write"
+    MEMORY_DELETE = "memory_delete"
+    MEMORY_SEARCH = "memory_search"
 
 
 def normalize_step_ref(value: str) -> str:
