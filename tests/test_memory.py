@@ -190,3 +190,177 @@ def test_event_type_memory_values():
     assert EventType.MEMORY_WRITE == "memory_write"
     assert EventType.MEMORY_DELETE == "memory_delete"
     assert EventType.MEMORY_SEARCH == "memory_search"
+
+
+# ---------- AuditingMemoryConnector ----------
+
+
+def test_auditing_connector_read_emits_event():
+    from governai.memory.auditing import AuditingMemoryConnector
+    from governai.audit.memory import InMemoryAuditEmitter
+
+    async def _run():
+        emitter = InMemoryAuditEmitter()
+        inner = DictMemoryConnector()
+        conn = AuditingMemoryConnector(
+            inner, emitter, run_id="r1", thread_id="t1", workflow_name="wf1"
+        )
+        # Read missing key
+        result = await conn.read("k", MemoryScope.RUN, target="r1")
+        assert result is None
+        assert len(emitter.events) == 1
+        ev = emitter.events[0]
+        assert ev.event_type == EventType.MEMORY_READ
+        assert ev.payload["key"] == "k"
+        assert ev.payload["scope"] == "run"
+        assert ev.payload["found"] is False
+
+        # Write then read existing
+        await inner.write("k", "v", MemoryScope.RUN, target="r1")
+        result = await conn.read("k", MemoryScope.RUN, target="r1")
+        assert result is not None
+        ev2 = emitter.events[-1]
+        assert ev2.event_type == EventType.MEMORY_READ
+        assert ev2.payload["found"] is True
+
+    asyncio.run(_run())
+
+
+def test_auditing_connector_write_emits_event():
+    from governai.memory.auditing import AuditingMemoryConnector
+    from governai.audit.memory import InMemoryAuditEmitter
+
+    async def _run():
+        emitter = InMemoryAuditEmitter()
+        inner = DictMemoryConnector()
+        conn = AuditingMemoryConnector(
+            inner, emitter, run_id="r1", thread_id="t1", workflow_name="wf1"
+        )
+        await conn.write("k", {"secret": "data"}, MemoryScope.RUN, target="r1")
+        assert len(emitter.events) == 1
+        ev = emitter.events[0]
+        assert ev.event_type == EventType.MEMORY_WRITE
+        assert ev.payload["key"] == "k"
+        assert ev.payload["scope"] == "run"
+
+    asyncio.run(_run())
+
+
+def test_auditing_write_created_flag():
+    from governai.memory.auditing import AuditingMemoryConnector
+    from governai.audit.memory import InMemoryAuditEmitter
+
+    async def _run():
+        emitter = InMemoryAuditEmitter()
+        inner = DictMemoryConnector()
+        conn = AuditingMemoryConnector(
+            inner, emitter, run_id="r1", thread_id="t1", workflow_name="wf1"
+        )
+        # First write — created
+        await conn.write("k", "v1", MemoryScope.RUN, target="r1")
+        assert emitter.events[-1].payload["created"] is True
+
+        # Second write — update
+        await conn.write("k", "v2", MemoryScope.RUN, target="r1")
+        assert emitter.events[-1].payload["created"] is False
+
+    asyncio.run(_run())
+
+
+def test_auditing_connector_delete_emits_on_missing():
+    from governai.memory.auditing import AuditingMemoryConnector
+    from governai.audit.memory import InMemoryAuditEmitter
+
+    async def _run():
+        emitter = InMemoryAuditEmitter()
+        inner = DictMemoryConnector()
+        conn = AuditingMemoryConnector(
+            inner, emitter, run_id="r1", thread_id="t1", workflow_name="wf1"
+        )
+        with pytest.raises(KeyError):
+            await conn.delete("x", MemoryScope.RUN, target="r1")
+        # Event still emitted even on error
+        assert len(emitter.events) == 1
+        ev = emitter.events[0]
+        assert ev.event_type == EventType.MEMORY_DELETE
+        assert ev.payload["found"] is False
+
+    asyncio.run(_run())
+
+
+def test_auditing_connector_delete_emits_on_existing():
+    from governai.memory.auditing import AuditingMemoryConnector
+    from governai.audit.memory import InMemoryAuditEmitter
+
+    async def _run():
+        emitter = InMemoryAuditEmitter()
+        inner = DictMemoryConnector()
+        conn = AuditingMemoryConnector(
+            inner, emitter, run_id="r1", thread_id="t1", workflow_name="wf1"
+        )
+        await inner.write("k", "v", MemoryScope.RUN, target="r1")
+        await conn.delete("k", MemoryScope.RUN, target="r1")
+        ev = emitter.events[-1]
+        assert ev.event_type == EventType.MEMORY_DELETE
+        assert ev.payload["found"] is True
+
+    asyncio.run(_run())
+
+
+def test_auditing_connector_search_emits_event():
+    from governai.memory.auditing import AuditingMemoryConnector
+    from governai.audit.memory import InMemoryAuditEmitter
+
+    async def _run():
+        emitter = InMemoryAuditEmitter()
+        inner = DictMemoryConnector()
+        conn = AuditingMemoryConnector(
+            inner, emitter, run_id="r1", thread_id="t1", workflow_name="wf1"
+        )
+        await inner.write("k1", "v1", MemoryScope.RUN, target="r1")
+        await inner.write("k2", "v2", MemoryScope.RUN, target="r1")
+        results = await conn.search({"text": "k"}, MemoryScope.RUN, target="r1")
+        assert len(results) == 2
+        ev = emitter.events[-1]
+        assert ev.event_type == EventType.MEMORY_SEARCH
+        assert ev.payload["query"] == {"text": "k"}
+        assert ev.payload["scope"] == "run"
+        assert ev.payload["result_count"] == 2
+
+    asyncio.run(_run())
+
+
+def test_auditing_write_no_value_in_payload():
+    from governai.memory.auditing import AuditingMemoryConnector
+    from governai.audit.memory import InMemoryAuditEmitter
+
+    async def _run():
+        emitter = InMemoryAuditEmitter()
+        inner = DictMemoryConnector()
+        conn = AuditingMemoryConnector(
+            inner, emitter, run_id="r1", thread_id="t1", workflow_name="wf1"
+        )
+        await conn.write("k", {"secret": "data"}, MemoryScope.RUN, target="r1")
+        ev = emitter.events[-1]
+        assert "value" not in ev.payload
+
+    asyncio.run(_run())
+
+
+def test_auditing_search_no_values_in_payload():
+    from governai.memory.auditing import AuditingMemoryConnector
+    from governai.audit.memory import InMemoryAuditEmitter
+
+    async def _run():
+        emitter = InMemoryAuditEmitter()
+        inner = DictMemoryConnector()
+        conn = AuditingMemoryConnector(
+            inner, emitter, run_id="r1", thread_id="t1", workflow_name="wf1"
+        )
+        await inner.write("k", "v", MemoryScope.RUN, target="r1")
+        await conn.search({}, MemoryScope.RUN, target="r1")
+        ev = emitter.events[-1]
+        assert "results" not in ev.payload
+        assert "values" not in ev.payload
+
+    asyncio.run(_run())
