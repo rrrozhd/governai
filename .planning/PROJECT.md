@@ -51,7 +51,7 @@ The runtime — not prompts, not application code — enforces what runs next, w
 - [x] Secrets-aware execution context — Validated in Phase 3: Runtime Depth
 - [x] Audit event enrichment protocol — Validated in Phase 3: Runtime Depth
 - [x] Interrupt TTL enforcement — Validated in Phase 1: Foundations
-- [ ] Memory connector protocol
+- [x] Memory connector protocol — Validated in Phase 4: Memory Layer
 
 ### Out of Scope
 
@@ -103,4 +103,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-05 after Phase 2 (Serializable Asset Layer) complete*
+*Last updated: 2026-04-06 after Phase 4 (Memory Layer) complete*
