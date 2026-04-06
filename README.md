@@ -13,10 +13,15 @@ It is designed for teams that need explicit control over what runs next, what is
 - Typed tool contracts (Python and CLI tools) with strict input/output validation.
 - Deterministic workflow chaining with strict, rule-based, or bounded transitions.
 - Runtime-enforced control flow (not prompt-enforced).
-- Policy checks before execution.
-- Approval interruptions before risky actions.
-- Full audit event streams for run lifecycle, transitions, policies, approvals, tools, and agents.
+- Policy checks before execution with fault isolation and per-policy timeouts.
+- Approval interruptions before risky actions with TTL enforcement.
+- Full audit event streams with typed extension metadata and secret redaction.
 - Governed multi-agent workflows where agents are bounded executors inside the same runtime kernel.
+- Capability-based access control with global, workflow, and step-scoped grants.
+- Thread lifecycle tracking with durable state transitions and audit trail.
+- Scope-aware memory connector protocol with pluggable backends and audit integration.
+- Serializable agent and tool definitions for storage, transmission, and reconstruction.
+- Atomic state persistence with optimistic locking and crash safety.
 
 ## What It Intentionally Does Not Do (MVP)
 
@@ -115,13 +120,18 @@ history = await MyFlow().list_thread_runs("thread-123")
 
 ## Core Concepts
 
-- **Tools**: typed executable units (`@tool` or `Tool.from_cli(...)`).
+- **Tools**: typed executable units (`@tool` or `Tool.from_cli(...)`) with versioning and schema fingerprinting.
 - **Skills**: named tool bundles.
 - **Workflows**: explicit step graph with runtime-enforced transitions.
-- **Policies**: allow/deny checks before execution.
-- **Approvals**: interruption/resume gates for risky actions.
-- **Audit events**: structured, in-memory event stream for inspection and tests.
+- **Policies**: allow/deny checks before execution with crash isolation and per-policy timeouts.
+- **Capabilities**: declare required capabilities on tools; runtime enforces grants before execution.
+- **Approvals**: interruption/resume gates for risky actions with TTL enforcement and sweep API.
+- **Audit events**: structured event stream with typed extension metadata and automatic secret redaction.
 - **Agents**: bounded role executors with allowlisted tools/handoffs, executed as workflow steps.
+- **Threads**: lifecycle-tracked execution contexts with state transitions and archival.
+- **Memory**: scope-aware (run, thread, shared) key-value storage with audit trail and pluggable backends.
+- **Secrets**: late-bound resolution via `SecretsProvider` with emitter-level redaction.
+- **Serialization**: `AgentSpec` and `ToolManifest` for storing and transmitting definitions as JSON.
 
 ## Tools vs LLM Tool Calling
 
@@ -292,6 +302,45 @@ flow = governed_flow_from_dsl(
 )
 ```
 
+
+## Governance Depth (v0.3.0)
+
+v0.3.0 adds ten governance primitives to the runtime:
+
+**Policy fault isolation** -- crashing or hung policies produce deny decisions instead of terminating the run. Each policy can declare a timeout enforced via `asyncio.wait_for`.
+
+**Interrupt TTL** -- expired interrupts raise `InterruptExpiredError` instead of silently processing stale data. `sweep_expired()` cleans up globally.
+
+**Contract versioning** -- tools and step specs carry a `version` field. `ToolRegistry` keys on `(name, version)`. Schema fingerprinting via blake2b detects drift.
+
+**Serializable assets** -- `AgentSpec` and `ToolManifest` are Pydantic models that round-trip through JSON for Zeroth Studio storage and transmission.
+
+**Atomic persistence** -- `RedisRunStore` uses WATCH/MULTI/EXEC for crash-safe writes. `InMemoryRunStore` uses epoch-based CAS.
+
+**Capability enforcement** -- tools declare required capabilities; `make_capability_policy()` checks grants (global, workflow, or step-scoped) before execution.
+
+**Thread lifecycle** -- `ThreadRecord` tracks states (created, active, idle, interrupted, archived) via a state machine. Archival preserves the audit trail.
+
+**Secrets management** -- `SecretsProvider` protocol with late-bound resolution. `RedactingAuditEmitter` replaces known secret values with `[REDACTED]` before persistence.
+
+**Audit enrichment** -- `AuditExtension` model for typed consumer metadata. Backward-compatible with v0.2.2 events.
+
+**Memory connector** -- `MemoryConnector` protocol with scope binding (run, thread, shared). `DictMemoryConnector` default backend. `AuditingMemoryConnector` emits typed events for all operations without exposing values. Access via `ctx.memory`.
+
+```python
+from governai import (
+    LocalRuntime, DictMemoryConnector, MemoryScope,
+    CapabilityGrant, AgentSpec, ToolManifest,
+)
+
+runtime = LocalRuntime(
+    grants=[CapabilityGrant(capability="db:read")],
+    memory_connector=DictMemoryConnector(),
+)
+
+# Tools access memory via ctx.memory.read/write/delete/search
+# Audit events are emitted automatically, values never in payloads
+```
 
 ## Documentation
 
