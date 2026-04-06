@@ -4,6 +4,10 @@ from collections.abc import Mapping
 from copy import deepcopy
 from typing import Any
 
+from governai.audit.emitter import AuditEmitter
+from governai.memory.auditing import AuditingMemoryConnector
+from governai.memory.connector import MemoryConnector
+from governai.memory.scoped import ScopedMemoryConnector
 from governai.models.approval import ApprovalRequest
 from governai.runtime.secrets import NullSecretsProvider, SecretRegistry, SecretsProvider
 
@@ -21,6 +25,9 @@ class ExecutionContext:
         approval_request: ApprovalRequest | None = None,
         secrets_provider: SecretsProvider | None = None,
         secret_registry: SecretRegistry | None = None,
+        memory_connector: MemoryConnector | None = None,
+        audit_emitter: AuditEmitter | None = None,
+        thread_id: str | None = None,
     ) -> None:
         """Initialize ExecutionContext."""
         self.run_id = run_id
@@ -32,6 +39,25 @@ class ExecutionContext:
         self.approval_request = approval_request
         self._secrets_provider = secrets_provider or NullSecretsProvider()
         self._secret_registry = secret_registry
+
+        # Memory wiring: per-execution audit wrapping (not at init time)
+        if memory_connector is not None and audit_emitter is not None:
+            auditing = AuditingMemoryConnector(
+                inner=memory_connector,
+                emitter=audit_emitter,
+                run_id=run_id,
+                thread_id=thread_id,
+                workflow_name=workflow_name,
+            )
+            self._memory: ScopedMemoryConnector | None = ScopedMemoryConnector(
+                auditing, run_id=run_id, thread_id=thread_id, workflow_name=workflow_name
+            )
+        elif memory_connector is not None:
+            self._memory = ScopedMemoryConnector(
+                memory_connector, run_id=run_id, thread_id=thread_id, workflow_name=workflow_name
+            )
+        else:
+            self._memory = None
 
     def get_artifact(self, key: str, default: Any = None) -> Any:
         """Get artifact."""
@@ -62,6 +88,11 @@ class ExecutionContext:
     def get_metadata(self, key: str, default: Any = None) -> Any:
         """Get metadata."""
         return self._metadata.get(key, default)
+
+    @property
+    def memory(self) -> ScopedMemoryConnector | None:
+        """Access scoped memory connector. None if no connector configured."""
+        return self._memory
 
     async def resolve_secret(self, key: str) -> str:
         """Resolve a secret by key. Registers value for audit redaction.
