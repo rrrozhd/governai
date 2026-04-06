@@ -15,6 +15,7 @@ from governai.runtime.run_store import (
     InMemoryRunStore,
     RedisRunStore,
     StateConcurrencyError,
+    WatchError,
     _validate_state,
 )
 
@@ -92,24 +93,12 @@ class FakePipeline:
             self._parent._force_watch_error -= 1
             self._parent._watch_called = True
             self._parent._execute_called = True
-            # Import here so the test can verify the real exception type
-            try:
-                from redis.exceptions import WatchError
-            except ImportError:
-                # Fallback: create a compatible exception
-                class WatchError(Exception):  # type: ignore[no-redef]
-                    pass
             raise WatchError("Simulated watch conflict")
 
         # Check watched keys for changes
         for key in self._watched_keys:
             current = self._parent.data.get(key)
             if current != self._watched_values.get(key):
-                try:
-                    from redis.exceptions import WatchError
-                except ImportError:
-                    class WatchError(Exception):  # type: ignore[no-redef]
-                        pass
                 raise WatchError("Watched key changed")
 
         # Execute buffered commands
