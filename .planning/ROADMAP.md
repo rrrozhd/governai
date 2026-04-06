@@ -79,7 +79,11 @@ Plans:
   1. A MemoryConnector read or write at any scope (thread, workflow, global) emits a corresponding typed audit event (MEMORY_READ or MEMORY_WRITE) that appears in the audit stream
   2. The built-in DictMemoryConnector works out of the box with no configuration — an alternative backend can be substituted by passing any object that satisfies the MemoryConnector Protocol
   3. Memory connector results are never stored directly in RunState — the runtime holds references or IDs only, keeping RunState size bounded
-**Plans**: TBD
+**Plans:** 2 plans
+
+Plans:
+- [ ] 04-01-PLAN.md — Memory module foundation (MemoryScope, MemoryEntry, MemoryConnector protocol, DictMemoryConnector, AuditingMemoryConnector, EventType additions)
+- [ ] 04-02-PLAN.md — Runtime wiring (ScopedMemoryConnector, ExecutionContext ctx.memory, LocalRuntime integration, public exports)
 
 ## Progress
 
@@ -91,4 +95,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 1. Foundations | 3/3 | Executing | - |
 | 2. Serializable Asset Layer | 0/3 | Not started | - |
 | 3. Runtime Depth | 3/4 | In Progress|  |
-| 4. Memory Layer | 0/TBD | Not started | - |
+| 4. Memory Layer | 0/2 | Not started | - |
