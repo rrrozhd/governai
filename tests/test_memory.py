@@ -364,3 +364,153 @@ def test_auditing_search_no_values_in_payload():
         assert "values" not in ev.payload
 
     asyncio.run(_run())
+
+
+# ---------- ScopedMemoryConnector ----------
+
+
+def test_scoped_memory_run_scope():
+    """ScopedMemoryConnector write with RUN scope uses run_id as target."""
+    from governai.memory.scoped import ScopedMemoryConnector
+
+    async def _run():
+        inner = DictMemoryConnector()
+        scoped = ScopedMemoryConnector(
+            inner, run_id="r1", thread_id="t1", workflow_name="wf"
+        )
+        await scoped.write("k", "v", MemoryScope.RUN)
+        # Data should land at target="r1"
+        entry = await inner.read("k", MemoryScope.RUN, target="r1")
+        assert entry is not None
+        assert entry.value == "v"
+
+    asyncio.run(_run())
+
+
+def test_scoped_memory_thread_scope():
+    """ScopedMemoryConnector write with THREAD scope uses thread_id as target."""
+    from governai.memory.scoped import ScopedMemoryConnector
+
+    async def _run():
+        inner = DictMemoryConnector()
+        scoped = ScopedMemoryConnector(
+            inner, run_id="r1", thread_id="t1", workflow_name="wf"
+        )
+        await scoped.write("k", "v", MemoryScope.THREAD)
+        entry = await inner.read("k", MemoryScope.THREAD, target="t1")
+        assert entry is not None
+        assert entry.value == "v"
+
+    asyncio.run(_run())
+
+
+def test_scoped_memory_shared_scope():
+    """ScopedMemoryConnector write with SHARED scope uses '__shared__' as target."""
+    from governai.memory.scoped import ScopedMemoryConnector
+
+    async def _run():
+        inner = DictMemoryConnector()
+        scoped = ScopedMemoryConnector(
+            inner, run_id="r1", thread_id="t1", workflow_name="wf"
+        )
+        await scoped.write("k", "v", MemoryScope.SHARED)
+        entry = await inner.read("k", MemoryScope.SHARED, target="__shared__")
+        assert entry is not None
+        assert entry.value == "v"
+
+    asyncio.run(_run())
+
+
+def test_scoped_memory_thread_fallback():
+    """ScopedMemoryConnector with thread_id=None uses run_id as fallback for THREAD scope."""
+    from governai.memory.scoped import ScopedMemoryConnector
+
+    async def _run():
+        inner = DictMemoryConnector()
+        scoped = ScopedMemoryConnector(
+            inner, run_id="r1", thread_id=None, workflow_name="wf"
+        )
+        await scoped.write("k", "v", MemoryScope.THREAD)
+        # Falls back to run_id
+        entry = await inner.read("k", MemoryScope.THREAD, target="r1")
+        assert entry is not None
+        assert entry.value == "v"
+
+    asyncio.run(_run())
+
+
+def test_scoped_memory_explicit_target_override():
+    """Explicit target overrides automatic scope resolution (D-03)."""
+    from governai.memory.scoped import ScopedMemoryConnector
+
+    async def _run():
+        inner = DictMemoryConnector()
+        scoped = ScopedMemoryConnector(
+            inner, run_id="r1", thread_id="t1", workflow_name="wf"
+        )
+        await scoped.write("k", "v", MemoryScope.RUN, target="custom")
+        # Data should land at target="custom", not "r1"
+        entry = await inner.read("k", MemoryScope.RUN, target="custom")
+        assert entry is not None
+        assert entry.value == "v"
+        # Should NOT be at run_id target
+        entry_at_run = await inner.read("k", MemoryScope.RUN, target="r1")
+        assert entry_at_run is None
+
+    asyncio.run(_run())
+
+
+# ---------- ExecutionContext memory ----------
+
+
+def test_execution_context_memory_accessor():
+    """ExecutionContext with memory_connector returns ScopedMemoryConnector from ctx.memory."""
+    from governai.memory.scoped import ScopedMemoryConnector
+    from governai.runtime.context import ExecutionContext
+
+    inner = DictMemoryConnector()
+    ctx = ExecutionContext(
+        run_id="r1",
+        workflow_name="wf",
+        step_name="step1",
+        artifacts={},
+        memory_connector=inner,
+    )
+    assert ctx.memory is not None
+    assert isinstance(ctx.memory, ScopedMemoryConnector)
+
+
+def test_execution_context_memory_none():
+    """ExecutionContext without memory_connector returns None from ctx.memory."""
+    from governai.runtime.context import ExecutionContext
+
+    ctx = ExecutionContext(
+        run_id="r1",
+        workflow_name="wf",
+        step_name="step1",
+        artifacts={},
+    )
+    assert ctx.memory is None
+
+
+def test_execution_context_memory_with_audit():
+    """ExecutionContext with both memory_connector and audit_emitter wraps with AuditingMemoryConnector."""
+    from governai.memory.scoped import ScopedMemoryConnector
+    from governai.audit.memory import InMemoryAuditEmitter
+    from governai.runtime.context import ExecutionContext
+
+    inner = DictMemoryConnector()
+    emitter = InMemoryAuditEmitter()
+    ctx = ExecutionContext(
+        run_id="r1",
+        workflow_name="wf",
+        step_name="step1",
+        artifacts={},
+        memory_connector=inner,
+        audit_emitter=emitter,
+    )
+    assert ctx.memory is not None
+    assert isinstance(ctx.memory, ScopedMemoryConnector)
+    # The inner of the ScopedMemoryConnector should be an AuditingMemoryConnector
+    from governai.memory.auditing import AuditingMemoryConnector
+    assert isinstance(ctx.memory._connector, AuditingMemoryConnector)
