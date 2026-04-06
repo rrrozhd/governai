@@ -514,3 +514,68 @@ def test_execution_context_memory_with_audit():
     # The inner of the ScopedMemoryConnector should be an AuditingMemoryConnector
     from governai.memory.auditing import AuditingMemoryConnector
     assert isinstance(ctx.memory._connector, AuditingMemoryConnector)
+
+
+# ---------- LocalRuntime wiring ----------
+
+
+def test_local_runtime_default_connector():
+    """LocalRuntime without memory_connector defaults to DictMemoryConnector."""
+    from governai.runtime.local import LocalRuntime
+
+    runtime = LocalRuntime()
+    assert isinstance(runtime._memory_connector, DictMemoryConnector)
+
+
+def test_local_runtime_custom_connector():
+    """LocalRuntime with explicit memory_connector uses it."""
+    from governai.runtime.local import LocalRuntime
+
+    custom = DictMemoryConnector()
+    runtime = LocalRuntime(memory_connector=custom)
+    assert runtime._memory_connector is custom
+
+
+def test_memory_not_in_run_state():
+    """Memory values are never stored in RunState."""
+    from governai.models.run_state import RunState
+    from governai.runtime.context import ExecutionContext
+
+    inner = DictMemoryConnector()
+    ctx = ExecutionContext(
+        run_id="r1",
+        workflow_name="wf",
+        step_name="step1",
+        artifacts={},
+        memory_connector=inner,
+    )
+
+    async def _run():
+        await ctx.memory.write("secret_key", "secret_value", MemoryScope.RUN)
+        entry = await ctx.memory.read("secret_key", MemoryScope.RUN)
+        assert entry is not None
+        assert entry.value == "secret_value"
+
+    asyncio.run(_run())
+
+    # RunState should never contain memory values
+    state = RunState(
+        run_id="r1",
+        workflow_name="wf",
+        current_step="step1",
+    )
+    json_str = state.model_dump_json()
+    assert "secret_value" not in json_str
+    assert "secret_key" not in json_str
+
+
+def test_public_exports():
+    """All six memory types are importable from governai package."""
+    import governai
+
+    assert hasattr(governai, "MemoryConnector")
+    assert hasattr(governai, "MemoryEntry")
+    assert hasattr(governai, "MemoryScope")
+    assert hasattr(governai, "DictMemoryConnector")
+    assert hasattr(governai, "AuditingMemoryConnector")
+    assert hasattr(governai, "ScopedMemoryConnector")

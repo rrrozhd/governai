@@ -20,6 +20,8 @@ from governai.extensions.remote import (
     RemoteExecutionError,
     RemoteToolExecutionRequest,
 )
+from governai.memory.connector import MemoryConnector
+from governai.memory.dict_connector import DictMemoryConnector
 from governai.models.approval import ApprovalDecision, ApprovalDecisionType
 from governai.models.command import Command
 from governai.models.common import DeterminismMode, END_STEP, EventType, RunStatus
@@ -73,6 +75,7 @@ class LocalRuntime:
         grants: list[CapabilityGrant] | None = None,
         secrets_provider: SecretsProvider | None = None,
         thread_store: ThreadStore | None = None,
+        memory_connector: "MemoryConnector | None" = None,
     ) -> None:
         """Initialize the local in-process runtime with governance defaults."""
         from governai.agents.registry import AgentRegistry
@@ -105,6 +108,9 @@ class LocalRuntime:
 
         # Per D-08: Thread lifecycle store (defaults to in-memory)
         self.thread_store = thread_store or InMemoryThreadStore()
+
+        # Per D-22: Optional injectable, defaults to DictMemoryConnector per MEM-03
+        self._memory_connector = memory_connector or DictMemoryConnector()
 
     def validate_workflow(self, workflow: Any) -> None:
         """Fail fast when workflow placement violates configured containment rules."""
@@ -797,6 +803,9 @@ class LocalRuntime:
             approval_request=state.pending_approval,
             secrets_provider=self._secrets_provider,
             secret_registry=self.secret_registry,
+            memory_connector=self._memory_connector,
+            audit_emitter=self.audit_emitter,
+            thread_id=getattr(state, 'thread_id', None),
         )
 
         try:
@@ -901,6 +910,9 @@ class LocalRuntime:
             approval_request=state.pending_approval,
             secrets_provider=self._secrets_provider,
             secret_registry=self.secret_registry,
+            memory_connector=self._memory_connector,
+            audit_emitter=self.audit_emitter,
+            thread_id=getattr(state, 'thread_id', None),
         )
 
         async def tool_caller(tool_name: str, tool_payload: Any) -> dict[str, Any]:

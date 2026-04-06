@@ -58,6 +58,14 @@ from governai.agents.result import AgentResult, AgentTask
 from governai.agents.registry import AgentRegistry
 from governai.approvals.engine import ApprovalEngine
 from governai.audit.memory import InMemoryAuditEmitter
+from governai.memory import (
+    AuditingMemoryConnector,
+    DictMemoryConnector,
+    MemoryConnector,
+    MemoryEntry,
+    MemoryScope,
+    ScopedMemoryConnector,
+)
 from governai.audit.redis import RedisAuditEmitter
 from governai.models.approval import ApprovalDecision, ApprovalDecisionType, ApprovalRequest
 from governai.models.audit import AuditEvent
@@ -165,6 +173,7 @@ __all__ = [
     "ApprovalRejectedError",
     "ApprovalRequest",
     "ApprovalRequiredError",
+    "AuditingMemoryConnector",
     "AsyncBackend",
     "AuditEvent",
     "BranchResolutionError",
@@ -176,6 +185,7 @@ __all__ = [
     "CLIToolProcessError",
     "CLIToolTimeoutError",
     "Command",
+    "DictMemoryConnector",
     "DeterminismMode",
     "DSLAst",
     "DSLError",
@@ -210,6 +220,9 @@ __all__ = [
     "InterruptResolution",
     "InterruptStore",
     "InvalidTransitionError",
+    "MemoryConnector",
+    "MemoryEntry",
+    "MemoryScope",
     "MappingPolicyResolver",
     "NormalizedLLMResponse",
     "NormalizedToolCall",
@@ -247,6 +260,7 @@ __all__ = [
     "RunStatus",
     "RunStore",
     "StateConcurrencyError",
+    "ScopedMemoryConnector",
     "Skill",
     "SkillRegistry",
     "SkillResolver",
