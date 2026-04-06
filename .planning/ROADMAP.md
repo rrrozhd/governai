@@ -82,7 +82,7 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 04-01-PLAN.md — Memory module foundation (MemoryScope, MemoryEntry, MemoryConnector protocol, DictMemoryConnector, AuditingMemoryConnector, EventType additions)
+- [x] 04-01-PLAN.md — Memory module foundation (MemoryScope, MemoryEntry, MemoryConnector protocol, DictMemoryConnector, AuditingMemoryConnector, EventType additions)
 - [ ] 04-02-PLAN.md — Runtime wiring (ScopedMemoryConnector, ExecutionContext ctx.memory, LocalRuntime integration, public exports)
 
 ## Progress
@@ -95,4 +95,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 1. Foundations | 3/3 | Executing | - |
 | 2. Serializable Asset Layer | 0/3 | Not started | - |
 | 3. Runtime Depth | 3/4 | In Progress|  |
-| 4. Memory Layer | 0/2 | Not started | - |
+| 4. Memory Layer | 1/2 | In Progress | - |

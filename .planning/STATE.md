@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.3.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 4 context gathered
-last_updated: "2026-04-06T09:18:25.907Z"
-last_activity: 2026-04-05
+stopped_at: Completed 04-01-PLAN.md
+last_updated: "2026-04-06T09:46:00Z"
+last_activity: 2026-04-06 -- Phase 04 Plan 01 complete
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 10
-  completed_plans: 10
-  percent: 8
+  total_plans: 12
+  completed_plans: 11
+  percent: 91
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-05)
 
 **Core value:** The runtime enforces governance guarantees at the framework layer.
-**Current focus:** Phase 03 — runtime-depth
+**Current focus:** Phase 04 — memory-layer
 
 ## Current Position
 
-Phase: 4
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-04-05
+Phase: 04 (memory-layer) — EXECUTING
+Plan: 2 of 2
+Status: Plan 01 complete, executing Plan 02
+Last activity: 2026-04-06 -- Phase 04 Plan 01 complete
 
-Progress: [█░░░░░░░░░] 8%
+Progress: [█████████░] 91%
 
 ## Performance Metrics
 
@@ -56,6 +56,7 @@ Progress: [█░░░░░░░░░] 8%
 | Phase 03-runtime-depth P03 | 2min | 1 tasks | 2 files |
 | Phase 03-runtime-depth P01 | 4min | 1 tasks | 4 files |
 | Phase 03-runtime-depth P02 | 3min | 1 tasks | 2 files |
+| Phase 04-memory-layer P01 | 4min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -78,6 +79,10 @@ Recent decisions affecting current work:
 - [Phase 03-runtime-depth]: AuditEvent.extensions defaults to [] via Field(default_factory=list) for v0.2.2 backward compat
 - [Phase 03-runtime-depth]: CapabilityGrant defaults to scope='global' with target=None for ergonomic single-arg usage
 - [Phase 03-runtime-depth]: make_capability_policy() is a closure capturing grants list -- deny reason sorted for determinism
+- [Phase 04-memory-layer]: MemoryScope uses str Enum (not StrEnum) to match existing EventType/RunStatus patterns
+- [Phase 04-memory-layer]: DictMemoryConnector returns model_copy(deep=True) on reads for isolation
+- [Phase 04-memory-layer]: AuditingMemoryConnector checks existence via read() before write() to determine created flag
+- [Phase 04-memory-layer]: AuditingMemoryConnector.delete() uses try/finally to emit audit even on KeyError (D-26)
 
 ### Pending Todos
 
@@ -91,6 +96,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-06T09:18:25.904Z
-Stopped at: Phase 4 context gathered
-Resume file: .planning/phases/04-memory-layer/04-CONTEXT.md
+Last session: 2026-04-06T09:46:00Z
+Stopped at: Completed 04-01-PLAN.md
+Resume file: .planning/phases/04-memory-layer/04-02-PLAN.md
